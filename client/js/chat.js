@@ -129,11 +129,13 @@ class ChatModule {
       const res = await Auth.fetch('/api/settings/workspace-dirs');
       const data = await res.json();
       const dirs = data.data.allowedDirs || [];
-      this.workDirSelect.innerHTML = dirs.map(d =>
-        `<option value="${d}" ${d === data.data.defaultWorkspace ? 'selected' : ''}>${d.replace(/.*\//, '~/')}</option>`
-      ).join('');
+      const home = dirs[0]?.match(/^\/Users\/[^/]+/)?.[0] || '';
+      this.workDirSelect.innerHTML = dirs.map(d => {
+        const label = home ? d.replace(home, '~') : d;
+        return `<option value="${d}" ${d === data.data.defaultWorkspace ? 'selected' : ''}>${label}</option>`;
+      }).join('');
     } catch (err) {
-      this.workDirSelect.innerHTML = `<option value="${'/Users/zhanghonghao/Desktop'}">/Users/zhanghonghao/Desktop</option>`;
+      this.workDirSelect.innerHTML = `<option value="/Users/zhanghonghao/Desktop">~/Desktop</option>`;
     }
   }
 
