@@ -40,12 +40,13 @@ class ChatModule {
       this.chatMeta.textContent = model;
     });
 
-    this.socket.on('chat:thinking', ({ text }) => {
+    this.socket.on('chat:thinking_delta', ({ text }) => {
       this._ensureBubble();
-      this._updateThinking(text);
+      this.thinkingText = (this.thinkingText || '') + text;
+      this._updateThinking(this.thinkingText);
     });
 
-    this.socket.on('chat:text', ({ text }) => {
+    this.socket.on('chat:text_delta', ({ text }) => {
       this._ensureBubble();
       this.rawText += text;
       this._scheduleRender();
@@ -339,6 +340,7 @@ class ChatModule {
     this.messagesList.appendChild(div);
     this.currentBubbleEl = div;
     this.rawText = '';
+    this.thinkingText = '';
   }
 
   _scheduleRender() {

@@ -27,8 +27,8 @@ module.exports = function (nsp) {
       activeSessions.set(socket.id, session);
 
       session.on('init', (data) => socket.emit('chat:init', data));
-      session.on('thinking', (data) => socket.emit('chat:thinking', data));
-      session.on('text', (data) => socket.emit('chat:text', data));
+      session.on('thinking_delta', (data) => socket.emit('chat:thinking_delta', data));
+      session.on('text_delta', (data) => socket.emit('chat:text_delta', data));
       session.on('tool_use', (data) => socket.emit('chat:tool', data));
       session.on('tool_result', (data) => socket.emit('chat:tool_result', data));
 
