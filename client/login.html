@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CatDesk Remote — 登录</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-card: #12121a;
+      --bg-input: #1a1a26;
+      --border: #2a2a3a;
+      --border-focus: #6366f1;
+      --text-primary: #e8e8f0;
+      --text-secondary: #8888a0;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.3);
+      --error: #ef4444;
+      --success: #22c55e;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* 背景网格动画 */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridFloat 20s linear infinite;
+    }
+
+    @keyframes gridFloat {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(60px, 60px); }
+    }
+
+    /* 背景光晕 */
+    .glow-orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.4;
+      animation: float 8s ease-in-out infinite;
+    }
+    .glow-orb-1 { width: 400px; height: 400px; background: #6366f1; top: -100px; right: -100px; }
+    .glow-orb-2 { width: 300px; height: 300px; background: #8b5cf6; bottom: -50px; left: -50px; animation-delay: -4s; }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(20px, -20px) scale(1.1); }
+    }
+
+    .login-container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+    }
+
+    .login-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 48px 40px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .logo-icon {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      border-radius: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 32px var(--accent-glow);
+    }
+
+    .logo h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+
+    .logo p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-top: 6px;
+      font-weight: 300;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      font-weight: 400;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 14px 16px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 15px;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all 0.2s;
+      outline: none;
+    }
+
+    .form-group input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .form-group input::placeholder {
+      color: #4a4a60;
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 14px;
+      margin-top: 8px;
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.3px;
+    }
+
+    .btn-login:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 25px var(--accent-glow);
+    }
+
+    .btn-login:active {
+      transform: translateY(0);
+    }
+
+    .btn-login:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .error-message {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 10px;
+      color: var(--error);
+      font-size: 13px;
+      display: none;
+      animation: shake 0.3s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    .error-message.visible { display: block; }
+
+    .footer-text {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      opacity: 0.6;
+    }
+
+    /* 加载动画 */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-orb glow-orb-1"></div>
+  <div class="glow-orb glow-orb-2"></div>
+
+  <div class="login-container">
+    <div class="login-card">
+      <div class="logo">
+        <div class="logo-icon">⚡</div>
+        <h1>CatDesk Remote</h1>
+        <p>远程 AI 开发工作站</p>
+      </div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="username">用户名</label>
+          <input type="text" id="username" name="username" placeholder="admin" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">密码</label>
+          <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-login" id="btnLogin">登 录</button>
+      </form>
+
+      <div class="error-message" id="errorMsg"></div>
+      <div class="footer-text">通过花生壳内网穿透安全连接</div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const btnLogin = document.getElementById('btnLogin');
+    const errorMsg = document.getElementById('errorMsg');
+
+    // 如果已有有效 token，直接跳转
+    const token = localStorage.getItem('catdesk_token');
+    if (token) {
+      window.location.href = '/';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.classList.remove('visible');
+      btnLogin.disabled = true;
+      btnLogin.innerHTML = '<span class="spinner"></span>验证中...';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error?.message || '登录失败');
+        }
+
+        localStorage.setItem('catdesk_token', data.data.token);
+        localStorage.setItem('catdesk_username', data.data.username);
+        window.location.href = '/';
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.add('visible');
+      } finally {
+        btnLogin.disabled = false;
+        btnLogin.textContent = '登 录';
+      }
+    });
+  </script>
+</body>
+</html>

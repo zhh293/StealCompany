@@ -1,0 +1,27 @@
+{
+  "name": "catdesk-remote-console",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CatDesk Remote Console - 远程 AI 开发工作站",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js",
+    "setup": "node scripts/setup.js",
+    "create-user": "node scripts/create-user.js"
+  },
+  "dependencies": {
+    "express": "^5.0.0",
+    "socket.io": "^4.8.0",
+    "node-pty": "^1.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.0",
+    "helmet": "^8.0.0",
+    "cors": "^2.8.5",
+    "express-rate-limit": "^7.4.0",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
