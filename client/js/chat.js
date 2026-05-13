@@ -149,15 +149,13 @@ class ChatModule {
   }
 
   _renderSessionList(sessions) {
-    this.sessionList.innerHTML = sessions.slice(0, 20).map(s => {
-      const time = new Date(s.timestamp).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    this.sessionList.innerHTML = sessions.slice(0, 30).map(s => {
+      const time = new Date(s.timestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const isActive = s.sessionId === this.currentSessionId;
       return `
-        <div class="session-item ${s.isCurrent ? 'active' : ''}" data-session-id="${s.sessionId}" data-conversation-id="${s.conversationId}">
-          <div class="session-item-title">${s.title || '未命名会话'}</div>
-          <div class="session-item-meta">
-            <span class="session-status ${s.status}"></span>
-            ${time}
-          </div>
+        <div class="session-item ${isActive ? 'active' : ''}" data-session-id="${s.sessionId}">
+          <div class="session-item-title">${this._escapeHtml(s.title || '未命名会话')}</div>
+          <div class="session-item-meta">${time}</div>
         </div>
       `;
     }).join('');
@@ -166,7 +164,7 @@ class ChatModule {
     this.sessionList.querySelectorAll('.session-item').forEach(item => {
       item.addEventListener('click', () => {
         const sessionId = item.dataset.sessionId;
-        this.resumeSession(sessionId);
+        this._loadSessionHistory(sessionId);
       });
     });
   }
@@ -222,6 +220,86 @@ class ChatModule {
     this.currentSessionId = sessionId;
     this.chatTitle.textContent = '已恢复会话';
     App.toast('会话已恢复，发送消息继续对话', 'success');
+  }
+
+  async _loadSessionHistory(sessionId) {
+    // 高亮选中的会话项
+    this.sessionList.querySelectorAll('.session-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.sessionId === sessionId);
+    });
+
+    this.currentSessionId = sessionId;
+    this.chatTitle.textContent = '加载中...';
+    this.messagesList.innerHTML = '<div class="loading-hint">加载历史消息...</div>';
+
+    try {
+      const res = await Auth.fetch(`/api/sessions/${sessionId}/messages`);
+      const data = await res.json();
+      const messages = data.data || [];
+
+      if (messages.length === 0) {
+        this.messagesList.innerHTML = '<div class="welcome-message"><p>该会话暂无消息记录</p></div>';
+        this.chatTitle.textContent = '空会话';
+        return;
+      }
+
+      // 渲染历史消息
+      this.messagesList.innerHTML = '';
+      let lastCost = null;
+
+      for (const msg of messages) {
+        if (msg.role === 'user') {
+          this._addUserMessage(msg.content);
+        } else if (msg.role === 'assistant') {
+          const div = document.createElement('div');
+          div.className = 'message message-assistant';
+          const html = DOMPurify.sanitize(marked.parse(msg.content || ''));
+          div.innerHTML = `
+            <div class="message-role"><span class="role-dot"></span>ASSISTANT</div>
+            <div class="message-content">${html}</div>
+          `;
+
+          // 显示工具调用
+          if (msg.tools && msg.tools.length > 0) {
+            const contentEl = div.querySelector('.message-content');
+            for (const tool of msg.tools) {
+              const toolEl = document.createElement('details');
+              toolEl.className = 'tool-call';
+              toolEl.innerHTML = `
+                <summary>🔧 ${this._escapeHtml(tool.name)}</summary>
+                <pre><code>${this._escapeHtml(JSON.stringify(tool.input, null, 2))}</code></pre>
+              `;
+              contentEl.appendChild(toolEl);
+            }
+          }
+
+          this.messagesList.appendChild(div);
+
+          // 代码高亮
+          div.querySelectorAll('pre code:not(.hljs)').forEach(block => {
+            hljs.highlightElement(block);
+          });
+        } else if (msg.role === 'system' && msg.type === 'result') {
+          lastCost = msg;
+        }
+      }
+
+      // 在最后添加费用信息
+      if (lastCost) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'message-meta session-meta';
+        metaEl.textContent = `💰 总计 $${lastCost.cost.toFixed(4)}`;
+        this.messagesList.appendChild(metaEl);
+      }
+
+      this.chatTitle.textContent = '历史会话';
+      this.chatMeta.textContent = `ID: ${sessionId.slice(0, 8)}...`;
+      this._scrollToBottom();
+      App.toast('发送新消息将继续此会话', 'info');
+    } catch (err) {
+      this.messagesList.innerHTML = `<div class="welcome-message"><p>加载失败: ${err.message}</p></div>`;
+      this.chatTitle.textContent = '加载失败';
+    }
   }
 
   _addUserMessage(text) {

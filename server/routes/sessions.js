@@ -3,30 +3,23 @@ const catdesk = require('../services/catdesk');
 
 const router = express.Router();
 
+// 获取会话列表
 router.get('/sessions', (req, res) => {
   try {
     const sessions = catdesk.getSessions();
     res.json({ data: sessions });
   } catch (err) {
-    res.status(500).json({ error: { code: 'CATDESK_ERROR', message: err.message } });
+    res.status(500).json({ error: { code: 'SESSION_ERROR', message: err.message } });
   }
 });
 
-router.get('/sessions/current', (req, res) => {
+// 获取指定会话的消息记录
+router.get('/sessions/:sessionId/messages', (req, res) => {
   try {
-    const current = catdesk.getCurrentSession();
-    res.json({ data: current });
-  } catch (err) {
-    res.status(500).json({ error: { code: 'CATDESK_ERROR', message: err.message } });
-  }
-});
-
-router.get('/sessions/:conversationId/messages', (req, res) => {
-  try {
-    const messages = catdesk.getMessages(req.params.conversationId);
+    const messages = catdesk.getMessages(req.params.sessionId);
     res.json({ data: messages });
   } catch (err) {
-    res.status(500).json({ error: { code: 'CATDESK_ERROR', message: err.message } });
+    res.status(500).json({ error: { code: 'SESSION_ERROR', message: err.message } });
   }
 });
 

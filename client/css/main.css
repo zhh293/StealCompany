@@ -252,6 +252,21 @@ body {
 .session-status.success { background: var(--text-4); }
 .session-status.error { background: var(--red); }
 
+.loading-hint {
+  text-align: center;
+  color: var(--text-4);
+  padding: 40px 20px;
+  font-size: 14px;
+}
+
+.session-meta {
+  text-align: center;
+  padding: 12px;
+  margin-top: 8px;
+  color: var(--text-4);
+  font-size: 12px;
+}
+
 /* 对话主区域 */
 .chat-main {
   flex: 1;
