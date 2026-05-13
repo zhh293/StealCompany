@@ -10,16 +10,17 @@
     "create-user": "node scripts/create-user.js"
   },
   "dependencies": {
-    "express": "^5.0.0",
-    "socket.io": "^4.8.0",
-    "node-pty": "^1.0.0",
-    "jsonwebtoken": "^9.0.0",
+    "@lydell/node-pty": "^1.2.0-beta.12",
     "bcryptjs": "^2.4.3",
-    "dotenv": "^16.4.0",
-    "helmet": "^8.0.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^5.0.0",
     "express-rate-limit": "^7.4.0",
-    "multer": "^1.4.5-lts.1"
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "multer": "^1.4.5-lts.1",
+    "node-pty": "^1.1.0",
+    "socket.io": "^4.8.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

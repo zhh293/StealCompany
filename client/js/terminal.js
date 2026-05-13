@@ -175,6 +175,10 @@ class TerminalModule {
 
   // 当终端视图变为可见时调用
   onShow() {
+    if (this.socket && !this.socket.connected) {
+      // 还没连上，等连上再创建
+      return;
+    }
     if (this.terminals.size === 0) {
       this.createTerminal();
     } else if (this.activeTerminalId) {

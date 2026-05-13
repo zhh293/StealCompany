@@ -1,17 +1,27 @@
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
+const path = require('path');
+
+// 确保 PATH 包含常见的 bin 目录（Node 子进程可能缺失）
+const extraPaths = ['/usr/local/bin', '/opt/homebrew/bin', path.join(process.env.HOME || '', '.local/bin')];
+const fullPath = [...extraPaths, process.env.PATH].join(':');
 
 class ClaudeCodeSession extends EventEmitter {
   constructor(options = {}) {
     super();
     this.sessionId = options.sessionId || null;
     this.workDir = options.workDir || process.env.HOME;
+    this.model = options.model || null;
     this.process = null;
     this.killed = false;
   }
 
   send(prompt) {
     const args = ['--code', '-p', prompt, '--output-format', 'stream-json', '--verbose'];
+
+    if (this.model) {
+      args.push('--model', this.model);
+    }
 
     if (this.sessionId) {
       args.push('--resume', this.sessionId);
@@ -20,7 +30,7 @@ class ClaudeCodeSession extends EventEmitter {
     this.killed = false;
     this.process = spawn('mc', args, {
       cwd: this.workDir,
-      env: { ...process.env, TERM: 'dumb' },
+      env: { ...process.env, PATH: fullPath, TERM: 'dumb' },
     });
 
     let buffer = '';

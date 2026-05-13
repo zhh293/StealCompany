@@ -6,7 +6,7 @@ module.exports = function (nsp) {
   nsp.on('connection', (socket) => {
     console.log(`[Chat] 客户端连接: ${socket.id}`);
 
-    socket.on('chat:send', ({ prompt, sessionId, workDir }) => {
+    socket.on('chat:send', ({ prompt, sessionId, workDir, model }) => {
       if (!prompt || !prompt.trim()) {
         socket.emit('chat:error', { message: '消息不能为空' });
         return;
@@ -22,6 +22,7 @@ module.exports = function (nsp) {
       const session = new ClaudeCodeSession({
         sessionId: sessionId || null,
         workDir: workDir || process.env.HOME,
+        model: model || null,
       });
       activeSessions.set(socket.id, session);
 

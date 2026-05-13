@@ -118,6 +118,19 @@
                   </svg>
                   <select id="workDirSelect"></select>
                 </label>
+                <label class="model-selector" title="选择模型">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                  </svg>
+                  <select id="modelSelect">
+                    <option value="">默认模型</option>
+                    <option value="sonnet">Sonnet</option>
+                    <option value="opus">Opus</option>
+                    <option value="haiku">Haiku</option>
+                    <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+                    <option value="claude-opus-4">claude-opus-4</option>
+                  </select>
+                </label>
               </div>
               <div class="input-wrapper">
                 <textarea id="chatInput" placeholder="输入你的问题... (Enter 发送, Shift+Enter 换行)" rows="1"></textarea>

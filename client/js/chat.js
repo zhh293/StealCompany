@@ -19,6 +19,7 @@ class ChatModule {
     this.chatMeta = document.getElementById('chatMeta');
     this.sessionList = document.getElementById('sessionList');
     this.workDirSelect = document.getElementById('workDirSelect');
+    this.modelSelect = document.getElementById('modelSelect');
   }
 
   init() {
@@ -185,10 +186,12 @@ class ChatModule {
     this._startGeneration();
 
     // 发送到后端
+    const model = this.modelSelect.value || undefined;
     this.socket.emit('chat:send', {
       prompt,
       sessionId: this.currentSessionId,
       workDir: this.workDirSelect.value,
+      model,
     });
   }
 

@@ -51,8 +51,8 @@ const App = {
       btn.classList.toggle('active', btn.dataset.view === viewName);
     });
 
-    // 切换面板
-    document.querySelectorAll('.view-panel').forEach(panel => {
+    // 切换面板（HTML 中的 class 是 .view）
+    document.querySelectorAll('.view').forEach(panel => {
       panel.classList.toggle('active', panel.id === `view-${viewName}`);
     });
 
