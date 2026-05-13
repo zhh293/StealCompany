@@ -33,7 +33,56 @@ npm start
 
 启动后访问 `http://localhost:3000`，使用刚创建的账号登录。
 
-## 花生壳内网穿透配置
+## 内网穿透配置（ZeroNews）
+
+使用 ZeroNews 将本地 3000 端口暴露到公网，从而在任何设备上通过浏览器访问。
+
+### 安装（macOS Apple 芯片）
+
+```bash
+mkdir -p /Applications/zeronews
+cd /Applications/zeronews
+curl -o zeronews.tmp https://download.zeronews.cc/macos/arm/zeronews
+mv zeronews.tmp zeronews
+chmod +x zeronews
+```
+
+Intel 芯片将下载地址中的 `arm` 替换为 `x86`。
+
+### 认证设备
+
+每个账户有唯一的 AuthToken，在 ZeroNews 控制台获取后执行（每台设备只需认证一次）：
+
+```bash
+cd /Applications/zeronews
+./zeronews authtoken <YOUR_AUTH_TOKEN>
+```
+
+### 添加隧道
+
+将本地 3000 端口映射为公网 HTTPS 地址：
+
+```bash
+./zeronews add https --local_ip=127.0.0.1 --port=3000
+```
+
+执行后会返回分配的公网 URL，例如 `https://xxxxx.hn.takin.cc`。
+
+### 启动
+
+```bash
+# 前台运行（终端关闭后程序退出）
+./zeronews start
+
+# 或后台运行
+./zeronews start -d
+```
+
+启动后即可通过公网 URL 访问 CatDesk Remote Console，使用创建的账号密码登录。
+
+### 花生壳（备选方案）
+
+如果使用花生壳而非 ZeroNews：
 
 1. 在花生壳管理面板添加一条 TCP 映射
 2. 内网主机填 `127.0.0.1`，内网端口填 `3000`
