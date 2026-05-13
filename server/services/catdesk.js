@@ -5,9 +5,10 @@ const path = require('path');
 const CLAUDE_DIR = path.join(process.env.HOME || '', '.claude', 'projects');
 
 /**
- * 扫描所有项目目录下的 .jsonl 会话文件，返回会话列表
+ * 扫描项目目录下的 .jsonl 会话文件，返回会话列表
+ * @param {string} [workDir] - 可选，按工作目录过滤。不传则返回所有会话
  */
-function getSessions() {
+function getSessions(workDir) {
   const sessions = [];
 
   if (!fs.existsSync(CLAUDE_DIR)) return sessions;
@@ -25,35 +26,42 @@ function getSessions() {
 
       try {
         const stat = fs.statSync(filePath);
-        // 读取第一行获取初始内容（用户第一条消息）作为标题
-        const firstLines = readFirstLines(filePath, 5);
+        const firstLines = readFirstLines(filePath, 10);
         let title = '未命名会话';
-        let firstUserContent = '';
+        let cwd = '';
 
         for (const line of firstLines) {
+          if (!line.trim()) continue;
           try {
             const obj = JSON.parse(line);
-            if (obj.type === 'queue-operation' && obj.operation === 'enqueue' && obj.content) {
-              title = obj.content.slice(0, 50);
-              break;
+            // 提取标题
+            if (!title || title === '未命名会话') {
+              if (obj.type === 'queue-operation' && obj.operation === 'enqueue' && obj.content) {
+                title = obj.content.slice(0, 50);
+              } else if (obj.type === 'user' && obj.message?.content) {
+                const content = typeof obj.message.content === 'string'
+                  ? obj.message.content : '';
+                if (content) title = content.slice(0, 50);
+              }
             }
-            if (obj.type === 'user' && obj.message?.content) {
-              const content = typeof obj.message.content === 'string'
-                ? obj.message.content
-                : obj.message.content;
-              title = (typeof content === 'string' ? content : '对话').slice(0, 50);
-              break;
+            // 提取 cwd
+            if (!cwd && obj.cwd) {
+              cwd = obj.cwd;
             }
+            // 两者都找到了就退出
+            if (title !== '未命名会话' && cwd) break;
           } catch (e) { /* skip parse errors */ }
         }
 
-        // 从目录名推断项目路径
-        const projectPath = dir.name.replace(/^-/, '/').replace(/-/g, '/');
+        // 如果指定了 workDir 过滤，只返回匹配的会话
+        if (workDir && cwd && cwd !== workDir) {
+          continue;
+        }
 
         sessions.push({
           sessionId,
           title,
-          projectPath,
+          cwd: cwd || '未知',
           projectDir: dir.name,
           timestamp: stat.mtimeMs,
           size: stat.size,

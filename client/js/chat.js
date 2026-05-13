@@ -116,6 +116,12 @@ class ChatModule {
       document.getElementById('chatSidebar').classList.toggle('hidden');
     });
 
+    // 切换工作区时刷新会话列表
+    this.workDirSelect.addEventListener('change', () => {
+      this._loadSessions();
+      this.newChat();
+    });
+
     // 快捷键
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.isGenerating) {
@@ -141,7 +147,9 @@ class ChatModule {
 
   async _loadSessions() {
     try {
-      const res = await Auth.fetch('/api/sessions');
+      const workDir = this.workDirSelect.value;
+      const url = workDir ? `/api/sessions?workDir=${encodeURIComponent(workDir)}` : '/api/sessions';
+      const res = await Auth.fetch(url);
       const data = await res.json();
       const sessions = data.data || [];
       this._renderSessionList(sessions);

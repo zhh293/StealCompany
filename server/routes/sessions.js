@@ -3,10 +3,11 @@ const catdesk = require('../services/catdesk');
 
 const router = express.Router();
 
-// 获取会话列表
+// 获取会话列表（可选 ?workDir= 过滤）
 router.get('/sessions', (req, res) => {
   try {
-    const sessions = catdesk.getSessions();
+    const workDir = req.query.workDir || null;
+    const sessions = catdesk.getSessions(workDir);
     res.json({ data: sessions });
   } catch (err) {
     res.status(500).json({ error: { code: 'SESSION_ERROR', message: err.message } });
