@@ -174,6 +174,8 @@ function executeCommand(socket, id, entry, cmd) {
       socket.emit('terminal:output', { id, data: `\x1b[2m[exit: ${code}]\x1b[0m\r\n` });
     }
     sendPrompt(socket, id, entry);
+    // 通知前端命令执行完毕（用于操作连贯性：文件刷新提示）
+    socket.emit('terminal:cmd_done', { id, cmd });
   });
 
   proc.on('error', (err) => {

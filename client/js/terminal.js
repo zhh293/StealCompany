@@ -25,6 +25,11 @@ class TerminalModule {
       if (entry) entry.term.write(data);
     });
 
+    // 命令执行完毕后通知文件浏览器可能有变化
+    this.socket.on('terminal:cmd_done', ({ id, cmd }) => {
+      this._onCommandDone(cmd);
+    });
+
     this.socket.on('terminal:exit', ({ id, code, reason }) => {
       const entry = this.terminals.get(id);
       if (entry) {
@@ -171,6 +176,51 @@ class TerminalModule {
         this.activeTerminalId = null;
       }
     }
+  }
+
+  // 命令执行完毕的回调 — 操作连贯性
+  _onCommandDone(cmd) {
+    // 判断是否可能影响文件系统的命令
+    const fileOps = ['touch', 'mkdir', 'rm', 'mv', 'cp', 'git', 'npm', 'yarn', 'pnpm', 'wget', 'curl', 'unzip', 'tar'];
+    const isFileOp = fileOps.some(op => cmd.startsWith(op + ' ') || cmd === op);
+
+    if (isFileOp) {
+      // 如果文件浏览器当前可见，直接刷新
+      if (App.currentView === 'files') {
+        App.modules.files.loadDirectory(App.modules.files.currentPath);
+        App.toast('文件列表已刷新', 'info');
+      } else {
+        // 标记需要刷新，并显示一个可操作的提示
+        App.modules.files._needsRefresh = true;
+        this._showFileRefreshHint();
+      }
+    }
+  }
+
+  _showFileRefreshHint() {
+    // 在终端顶部显示一个可点击的提示条
+    const existing = document.querySelector('.file-refresh-hint');
+    if (existing) return; // 避免重复
+
+    const hint = document.createElement('div');
+    hint.className = 'file-refresh-hint';
+    hint.innerHTML = `
+      <span>📁 文件可能已变更</span>
+      <button class="hint-action" id="hintGoFiles">查看文件</button>
+      <button class="hint-dismiss">×</button>
+    `;
+    document.getElementById('view-terminal').prepend(hint);
+
+    hint.querySelector('#hintGoFiles').addEventListener('click', () => {
+      App.switchView('files');
+      hint.remove();
+    });
+    hint.querySelector('.hint-dismiss').addEventListener('click', () => {
+      hint.remove();
+    });
+
+    // 10秒后自动消失
+    setTimeout(() => hint.remove(), 10000);
   }
 
   // 当终端视图变为可见时调用

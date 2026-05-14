@@ -2,6 +2,7 @@
 class FilesModule {
   constructor() {
     this.currentPath = '';
+    this._needsRefresh = false;
     this.fileList = document.getElementById('fileList');
     this.filePreview = document.getElementById('filePreview');
     this.breadcrumb = document.getElementById('breadcrumb');
@@ -24,6 +25,13 @@ class FilesModule {
         this.currentPath = '/Users/zhanghonghao/Desktop';
       }
     }
+
+    // 如果有待刷新标记，自动刷新
+    if (this._needsRefresh) {
+      this._needsRefresh = false;
+      App.toast('文件列表已自动刷新', 'info');
+    }
+
     this.loadDirectory(this.currentPath);
   }
 

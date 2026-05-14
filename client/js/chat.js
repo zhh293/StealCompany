@@ -65,6 +65,9 @@ class ChatModule {
       this.currentSessionId = sessionId;
       this._finishGeneration(cost, duration);
       this._loadSessions();
+
+      // 通知终端模块：可能有新文件产生，触发文件浏览器刷新提示
+      this._notifyFileChange();
     });
 
     this.socket.on('chat:error', ({ message }) => {
@@ -127,6 +130,16 @@ class ChatModule {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.isGenerating) {
         this.stop();
+      }
+    });
+
+    // 消息区域点击事件代理 — 处理可点击文件路径
+    this.messagesList.addEventListener('click', (e) => {
+      const pathLink = e.target.closest('.clickable-path');
+      if (pathLink) {
+        e.preventDefault();
+        const filePath = pathLink.dataset.path;
+        this._openFilePath(filePath);
       }
     });
   }
@@ -223,6 +236,11 @@ class ChatModule {
           <span class="tip">代码高亮</span>
           <span class="tip">会话恢复</span>
         </div>
+        <div class="shortcut-hints">
+          <span class="shortcut-hint"><kbd>⌘K</kbd> 快速切换</span>
+          <span class="shortcut-hint"><kbd>⌘N</kbd> 新对话</span>
+          <span class="shortcut-hint"><kbd>⌘Enter</kbd> 发送</span>
+        </div>
       </div>
     `;
   }
@@ -264,10 +282,10 @@ class ChatModule {
         } else if (msg.role === 'assistant') {
           const div = document.createElement('div');
           div.className = 'message message-assistant';
-          const html = DOMPurify.sanitize(marked.parse(msg.content || ''));
+          const rendered = this._renderMarkdownWithPaths(msg.content || '');
           div.innerHTML = `
             <div class="message-role"><span class="role-dot"></span>ASSISTANT</div>
-            <div class="message-content">${html}</div>
+            <div class="message-content">${rendered}</div>
           `;
 
           // 显示工具调用
@@ -356,8 +374,8 @@ class ChatModule {
     if (!this.currentBubbleEl) return;
     const contentEl = this.currentBubbleEl.querySelector('.message-content');
 
-    // 使用 marked 渲染 Markdown，DOMPurify 消毒
-    const html = DOMPurify.sanitize(marked.parse(this.rawText));
+    // 渲染 Markdown 并处理文件路径
+    const html = this._renderMarkdownWithPaths(this.rawText);
     contentEl.innerHTML = html;
 
     // 代码高亮
@@ -383,6 +401,18 @@ class ChatModule {
     if (!this.userScrolled) {
       this._scrollToBottom();
     }
+  }
+
+  // 渲染 Markdown 并将文件路径转换为可点击链接
+  _renderMarkdownWithPaths(text) {
+    const html = DOMPurify.sanitize(marked.parse(text));
+    // 匹配绝对路径（以 / 开头，包含至少两层目录）
+    // 但不处理 code 和 pre 内的路径
+    const pathRegex = /(?<!["`'])(\/(Users|home|tmp|var|etc|opt)[^\s<>"'`\)]*\.\w+)(?!["`'])/g;
+    return html.replace(pathRegex, (match, path) => {
+      // 确保不在 <code> 或 <pre> 标签内（简单启发式）
+      return `<a class="clickable-path" data-path="${this._escapeHtml(path)}" title="点击在文件浏览器中打开">${this._escapeHtml(path)}</a>`;
+    });
   }
 
   _updateThinking(text) {
@@ -434,6 +464,42 @@ class ChatModule {
 
     this.currentBubbleEl = null;
     this._doRender(); // 最终渲染
+  }
+
+  // 操作连贯性：通知文件浏览器可能有变化
+  _notifyFileChange() {
+    // 如果当前在文件视图或对话中涉及文件操作，显示刷新提示
+    if (App.currentView === 'files') {
+      App.modules.files.loadDirectory(App.modules.files.currentPath);
+    } else {
+      // 标记文件浏览器需要刷新
+      App.modules.files._needsRefresh = true;
+    }
+  }
+
+  // 点击文件路径跳转到文件浏览器
+  _openFilePath(filePath) {
+    const isFile = /\.\w+$/.test(filePath);
+    if (isFile) {
+      // 提取目录路径
+      const dirPath = filePath.substring(0, filePath.lastIndexOf('/'));
+      App.switchView('files');
+      App.modules.files.loadDirectory(dirPath).then(() => {
+        // 尝试高亮并打开目标文件
+        setTimeout(() => {
+          App.modules.files.loadFile(filePath);
+          // 高亮文件项
+          const items = document.querySelectorAll('.file-item');
+          items.forEach(el => {
+            el.classList.toggle('active', el.dataset.path === filePath);
+          });
+        }, 300);
+      });
+    } else {
+      App.switchView('files');
+      App.modules.files.loadDirectory(filePath);
+    }
+    App.toast(`已跳转到: ${filePath.split('/').pop()}`, 'info');
   }
 
   _scrollToBottom() {
