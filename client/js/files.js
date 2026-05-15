@@ -1,8 +1,12 @@
-// 文件浏览模块
+// 文件浏览模块 — 支持在线编辑、分页预览
 class FilesModule {
   constructor() {
     this.currentPath = '';
+    this.currentFilePath = '';
+    this.isEditing = false;
     this._needsRefresh = false;
+    this.currentPage = 1;
+    this.totalPages = 1;
     this.fileList = document.getElementById('fileList');
     this.filePreview = document.getElementById('filePreview');
     this.breadcrumb = document.getElementById('breadcrumb');
@@ -16,7 +20,6 @@ class FilesModule {
 
   async onShow() {
     if (!this.currentPath) {
-      // 获取默认目录
       try {
         const res = await Auth.fetch('/api/settings/workspace-dirs');
         const data = await res.json();
@@ -26,7 +29,6 @@ class FilesModule {
       }
     }
 
-    // 如果有待刷新标记，自动刷新
     if (this._needsRefresh) {
       this._needsRefresh = false;
       App.toast('文件列表已自动刷新', 'info');
@@ -39,12 +41,7 @@ class FilesModule {
     try {
       const res = await Auth.fetch(`/api/files/list?path=${encodeURIComponent(dirPath)}`);
       const data = await res.json();
-
-      if (!res.ok) {
-        App.toast(data.error?.message || '加载失败', 'error');
-        return;
-      }
-
+      if (!res.ok) { App.toast(data.error?.message || '加载失败', 'error'); return; }
       this.currentPath = data.data.path;
       this._renderBreadcrumb(data.data.path);
       this._renderFileList(data.data.items);
@@ -53,16 +50,15 @@ class FilesModule {
     }
   }
 
-  async loadFile(filePath) {
+  async loadFile(filePath, page = 1) {
     try {
-      const res = await Auth.fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+      const url = `/api/files/read?path=${encodeURIComponent(filePath)}&page=${page}&pageSize=500`;
+      const res = await Auth.fetch(url);
       const data = await res.json();
-
-      if (!res.ok) {
-        App.toast(data.error?.message || '读取失败', 'error');
-        return;
-      }
-
+      if (!res.ok) { App.toast(data.error?.message || '读取失败', 'error'); return; }
+      this.currentFilePath = filePath;
+      this.currentPage = data.data.currentPage;
+      this.totalPages = data.data.totalPages;
       this._renderPreview(data.data);
     } catch (err) {
       App.toast('读取文件失败', 'error');
@@ -72,19 +68,14 @@ class FilesModule {
   _renderBreadcrumb(fullPath) {
     const parts = fullPath.split('/').filter(Boolean);
     let html = '<span class="breadcrumb-item" data-path="/">/</span>';
-
     let accumulated = '';
     for (const part of parts) {
       accumulated += '/' + part;
       html += `<span class="breadcrumb-sep">/</span><span class="breadcrumb-item" data-path="${accumulated}">${part}</span>`;
     }
-
     this.breadcrumb.innerHTML = html;
-
     this.breadcrumb.querySelectorAll('.breadcrumb-item').forEach(item => {
-      item.addEventListener('click', () => {
-        this.loadDirectory(item.dataset.path);
-      });
+      item.addEventListener('click', () => this.loadDirectory(item.dataset.path));
     });
   }
 
@@ -106,7 +97,6 @@ class FilesModule {
         if (el.dataset.type === 'directory') {
           this.loadDirectory(el.dataset.path);
         } else {
-          // 高亮选中
           this.fileList.querySelectorAll('.file-item').forEach(e => e.classList.remove('active'));
           el.classList.add('active');
           this.loadFile(el.dataset.path);
@@ -116,15 +106,124 @@ class FilesModule {
   }
 
   _renderPreview(fileData) {
-    const { content, extension, path, size } = fileData;
+    const { content, extension, path: filePath, size, paginated, totalLines, totalPages, currentPage, startLine, endLine } = fileData;
     const isCode = ['js', 'ts', 'py', 'java', 'go', 'rs', 'c', 'cpp', 'h', 'css', 'html', 'json', 'yaml', 'yml', 'toml', 'md', 'sh', 'bash', 'zsh', 'sql', 'xml', 'vue', 'jsx', 'tsx'].includes(extension);
 
+    let headerHtml = `
+      <div class="preview-header">
+        <div class="preview-info">
+          <span class="preview-filename">${filePath.split('/').pop()}</span>
+          <span class="preview-size">${this._formatSize(size)}</span>
+          ${totalLines ? `<span class="preview-lines">${totalLines} 行</span>` : ''}
+        </div>
+        <div class="preview-actions">
+          <button class="btn-preview-action" id="btnEditFile" title="编辑文件">✏️ 编辑</button>
+          <button class="btn-preview-action hidden" id="btnSaveFile" title="保存文件">💾 保存</button>
+          <button class="btn-preview-action hidden" id="btnCancelEdit" title="取消编辑">❌ 取消</button>
+        </div>
+      </div>
+    `;
+
+    let paginationHtml = '';
+    if (paginated) {
+      paginationHtml = `
+        <div class="preview-pagination">
+          <button class="btn-page" ${currentPage <= 1 ? 'disabled' : ''} data-page="${currentPage - 1}">← 上一页</button>
+          <span class="page-info">第 ${currentPage} / ${totalPages} 页 (行 ${startLine}-${endLine})</span>
+          <button class="btn-page" ${currentPage >= totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">下一页 →</button>
+        </div>
+      `;
+    }
+
+    let contentHtml;
     if (isCode) {
       const highlighted = hljs.highlightAuto(content).value;
-      this.filePreview.innerHTML = `<pre class="preview-content"><code class="hljs">${highlighted}</code></pre>`;
+      contentHtml = `<pre class="preview-content" id="previewCode"><code class="hljs">${highlighted}</code></pre>`;
     } else {
-      this.filePreview.innerHTML = `<pre class="preview-content">${this._escapeHtml(content)}</pre>`;
+      contentHtml = `<pre class="preview-content" id="previewCode">${this._escapeHtml(content)}</pre>`;
     }
+
+    this.filePreview.innerHTML = headerHtml + contentHtml + paginationHtml;
+
+    // 编辑按钮
+    const btnEdit = document.getElementById('btnEditFile');
+    const btnSave = document.getElementById('btnSaveFile');
+    const btnCancel = document.getElementById('btnCancelEdit');
+
+    btnEdit.addEventListener('click', () => {
+      this._enterEditMode(content);
+    });
+
+    btnSave.addEventListener('click', () => {
+      this._saveFile();
+    });
+
+    btnCancel.addEventListener('click', () => {
+      this._exitEditMode();
+      this.loadFile(this.currentFilePath, this.currentPage);
+    });
+
+    // 分页按钮
+    this.filePreview.querySelectorAll('.btn-page').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const page = parseInt(btn.dataset.page);
+        if (page >= 1 && page <= totalPages) {
+          this.loadFile(this.currentFilePath, page);
+        }
+      });
+    });
+  }
+
+  _enterEditMode(content) {
+    this.isEditing = true;
+    const codeEl = document.getElementById('previewCode');
+    if (!codeEl) return;
+
+    // 替换为 textarea
+    const textarea = document.createElement('textarea');
+    textarea.id = 'fileEditor';
+    textarea.className = 'file-editor';
+    textarea.value = content;
+    textarea.spellcheck = false;
+    codeEl.replaceWith(textarea);
+
+    // 显示/隐藏按钮
+    document.getElementById('btnEditFile').classList.add('hidden');
+    document.getElementById('btnSaveFile').classList.remove('hidden');
+    document.getElementById('btnCancelEdit').classList.remove('hidden');
+
+    textarea.focus();
+    App.toast('已进入编辑模式', 'info');
+  }
+
+  async _saveFile() {
+    const editor = document.getElementById('fileEditor');
+    if (!editor || !this.currentFilePath) return;
+
+    try {
+      const res = await Auth.fetch('/api/files/write', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: this.currentFilePath, content: editor.value }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        App.toast(data.error?.message || '保存失败', 'error');
+        return;
+      }
+      App.toast('文件已保存', 'success');
+      this._exitEditMode();
+      this.loadFile(this.currentFilePath, this.currentPage);
+    } catch (err) {
+      App.toast('保存失败: ' + err.message, 'error');
+    }
+  }
+
+  _exitEditMode() {
+    this.isEditing = false;
+    document.getElementById('btnEditFile')?.classList.remove('hidden');
+    document.getElementById('btnSaveFile')?.classList.add('hidden');
+    document.getElementById('btnCancelEdit')?.classList.add('hidden');
   }
 
   _getFileIcon(name) {

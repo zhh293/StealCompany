@@ -1,9 +1,9 @@
-// AI 对话模块
+// AI 对话模块 — 完整功能版
 class ChatModule {
   constructor() {
     this.socket = null;
     this.currentSessionId = null;
-    this.messages = [];
+    this.messages = []; // 存储所有消息用于导出和虚拟滚动
     this.isGenerating = false;
     this.currentBubbleEl = null;
     this.rawText = '';
@@ -23,17 +23,23 @@ class ChatModule {
   }
 
   init() {
-    this.socket = io('/chat', { auth: { token: Auth.getToken() } });
+    this.socket = io('/chat', {
+      auth: { token: Auth.getToken() },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+    });
     this._bindSocketEvents();
     this._bindUIEvents();
+    this._bindDragDrop();
+    this._bindExport();
     this._loadWorkDirs();
     this._loadSessions();
   }
 
   _bindSocketEvents() {
-    this.socket.on('connect', () => {
-      console.log('[Chat] Connected');
-    });
+    this.socket.on('connect', () => console.log('[Chat] Connected'));
 
     this.socket.on('chat:init', ({ sessionId, model }) => {
       this.currentSessionId = sessionId;
@@ -57,16 +63,14 @@ class ChatModule {
       this._addToolCall(name, input);
     });
 
-    this.socket.on('chat:tool_result', ({ id, content }) => {
-      // 可选：显示工具结果
-    });
+    this.socket.on('chat:tool_result', ({ id, content }) => {});
 
     this.socket.on('chat:done', ({ result, cost, duration, sessionId }) => {
       this.currentSessionId = sessionId;
+      // 保存消息用于导出
+      this.messages.push({ role: 'assistant', content: this.rawText, cost, duration });
       this._finishGeneration(cost, duration);
       this._loadSessions();
-
-      // 通知终端模块：可能有新文件产生，触发文件浏览器刷新提示
       this._notifyFileChange();
     });
 
@@ -80,68 +84,126 @@ class ChatModule {
       App.toast('已停止生成', 'info');
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('[Chat] Disconnected');
-    });
+    this.socket.on('disconnect', () => console.log('[Chat] Disconnected'));
   }
 
   _bindUIEvents() {
-    // 发送
     this.btnSend.addEventListener('click', () => this.send());
     this.btnStop.addEventListener('click', () => this.stop());
 
-    // 输入框
     this.chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        this.send();
-      }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); }
     });
 
-    // 自动调整输入框高度
     this.chatInput.addEventListener('input', () => {
       this.chatInput.style.height = 'auto';
       this.chatInput.style.height = Math.min(this.chatInput.scrollHeight, 150) + 'px';
     });
 
-    // 监听用户滚动
     this.messagesContainer.addEventListener('scroll', () => {
       const { scrollTop, scrollHeight, clientHeight } = this.messagesContainer;
       this.userScrolled = scrollHeight - scrollTop - clientHeight > 50;
     });
 
-    // 新建会话
-    document.getElementById('btnNewChat').addEventListener('click', () => {
-      this.newChat();
-    });
-
-    // 侧边栏切换
+    document.getElementById('btnNewChat').addEventListener('click', () => this.newChat());
     document.getElementById('btnToggleSidebar').addEventListener('click', () => {
       document.getElementById('chatSidebar').classList.toggle('hidden');
     });
 
-    // 切换工作区时刷新会话列表
-    this.workDirSelect.addEventListener('change', () => {
-      this._loadSessions();
-      this.newChat();
-    });
+    this.workDirSelect.addEventListener('change', () => { this._loadSessions(); this.newChat(); });
 
-    // 快捷键
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isGenerating) {
-        this.stop();
-      }
+      if (e.key === 'Escape' && this.isGenerating) this.stop();
     });
 
-    // 消息区域点击事件代理 — 处理可点击文件路径
+    // 点击事件代理 — 文件路径跳转 + 复制按钮
     this.messagesList.addEventListener('click', (e) => {
       const pathLink = e.target.closest('.clickable-path');
-      if (pathLink) {
-        e.preventDefault();
-        const filePath = pathLink.dataset.path;
-        this._openFilePath(filePath);
+      if (pathLink) { e.preventDefault(); this._openFilePath(pathLink.dataset.path); }
+
+      const copyBtn = e.target.closest('.msg-copy-btn');
+      if (copyBtn) {
+        const msgEl = copyBtn.closest('.message');
+        const content = msgEl?.querySelector('.message-content')?.textContent || '';
+        navigator.clipboard.writeText(content);
+        copyBtn.textContent = '已复制';
+        setTimeout(() => copyBtn.textContent = '复制回复', 1500);
       }
     });
+  }
+
+  // ===== 拖拽文件支持 =====
+  _bindDragDrop() {
+    const wrapper = document.getElementById('inputWrapper');
+    const overlay = document.getElementById('dropOverlay');
+
+    ['dragenter', 'dragover'].forEach(evt => {
+      wrapper.addEventListener(evt, (e) => {
+        e.preventDefault();
+        overlay.classList.remove('hidden');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      wrapper.addEventListener(evt, () => {
+        overlay.classList.add('hidden');
+      });
+    });
+
+    wrapper.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        // 将文件路径附加到输入框
+        const paths = [...files].map(f => f.path || f.name).filter(Boolean);
+        if (paths.length > 0) {
+          const current = this.chatInput.value;
+          const prefix = current ? current + '\n' : '';
+          this.chatInput.value = prefix + '附加文件:\n' + paths.map(p => `- ${p}`).join('\n');
+          this.chatInput.style.height = 'auto';
+          this.chatInput.style.height = Math.min(this.chatInput.scrollHeight, 150) + 'px';
+          App.toast(`已附加 ${paths.length} 个文件路径`, 'success');
+        }
+      }
+    });
+  }
+
+  // ===== 对话导出 =====
+  _bindExport() {
+    document.getElementById('btnExportChat').addEventListener('click', () => {
+      this.exportCurrentChat();
+    });
+  }
+
+  exportCurrentChat() {
+    if (this.messages.length === 0) {
+      App.toast('当前没有可导出的消息', 'info');
+      return;
+    }
+
+    let md = `# CatDesk 对话记录\n\n`;
+    md += `- 时间: ${new Date().toLocaleString('zh-CN')}\n`;
+    md += `- 工作目录: ${this.workDirSelect.value}\n`;
+    md += `- 模型: ${this.modelSelect.value || '默认'}\n\n---\n\n`;
+
+    for (const msg of this.messages) {
+      if (msg.role === 'user') {
+        md += `## 👤 用户\n\n${msg.content}\n\n`;
+      } else if (msg.role === 'assistant') {
+        md += `## 🤖 助手\n\n${msg.content}\n\n`;
+        if (msg.cost) md += `> ⏱ ${(msg.duration / 1000).toFixed(1)}s · 💰 $${msg.cost.toFixed(4)}\n\n`;
+      }
+    }
+
+    // 下载为 .md 文件
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `catdesk-chat-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    App.toast('对话已导出为 Markdown', 'success');
   }
 
   async _loadWorkDirs() {
@@ -165,11 +227,8 @@ class ChatModule {
       const url = workDir ? `/api/sessions?workDir=${encodeURIComponent(workDir)}` : '/api/sessions';
       const res = await Auth.fetch(url);
       const data = await res.json();
-      const sessions = data.data || [];
-      this._renderSessionList(sessions);
-    } catch (err) {
-      // 静默失败
-    }
+      this._renderSessionList(data.data || []);
+    } catch (err) {}
   }
 
   _renderSessionList(sessions) {
@@ -184,12 +243,8 @@ class ChatModule {
       `;
     }).join('');
 
-    // 绑定点击事件
     this.sessionList.querySelectorAll('.session-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const sessionId = item.dataset.sessionId;
-        this._loadSessionHistory(sessionId);
-      });
+      item.addEventListener('click', () => this._loadSessionHistory(item.dataset.sessionId));
     });
   }
 
@@ -197,17 +252,12 @@ class ChatModule {
     const prompt = this.chatInput.value.trim();
     if (!prompt || this.isGenerating) return;
 
-    // 显示用户消息
+    this.messages.push({ role: 'user', content: prompt });
     this._addUserMessage(prompt);
-
-    // 清空输入
     this.chatInput.value = '';
     this.chatInput.style.height = 'auto';
-
-    // 进入生成状态
     this._startGeneration();
 
-    // 发送到后端
     const model = this.modelSelect.value || undefined;
     this.socket.emit('chat:send', {
       prompt,
@@ -217,9 +267,7 @@ class ChatModule {
     });
   }
 
-  stop() {
-    this.socket.emit('chat:stop');
-  }
+  stop() { this.socket.emit('chat:stop'); }
 
   newChat() {
     this.currentSessionId = null;
@@ -245,18 +293,10 @@ class ChatModule {
     `;
   }
 
-  resumeSession(sessionId) {
-    this.currentSessionId = sessionId;
-    this.chatTitle.textContent = '已恢复会话';
-    App.toast('会话已恢复，发送消息继续对话', 'success');
-  }
-
   async _loadSessionHistory(sessionId) {
-    // 高亮选中的会话项
     this.sessionList.querySelectorAll('.session-item').forEach(el => {
       el.classList.toggle('active', el.dataset.sessionId === sessionId);
     });
-
     this.currentSessionId = sessionId;
     this.chatTitle.textContent = '加载中...';
     this.messagesList.innerHTML = '<div class="loading-hint">加载历史消息...</div>';
@@ -272,48 +312,44 @@ class ChatModule {
         return;
       }
 
-      // 渲染历史消息
       this.messagesList.innerHTML = '';
+      this.messages = [];
       let lastCost = null;
 
       for (const msg of messages) {
         if (msg.role === 'user') {
+          this.messages.push({ role: 'user', content: msg.content });
           this._addUserMessage(msg.content);
         } else if (msg.role === 'assistant') {
+          this.messages.push({ role: 'assistant', content: msg.content });
           const div = document.createElement('div');
           div.className = 'message message-assistant';
           const rendered = this._renderMarkdownWithPaths(msg.content || '');
           div.innerHTML = `
-            <div class="message-role"><span class="role-dot"></span>ASSISTANT</div>
+            <div class="message-header">
+              <div class="message-role"><span class="role-dot"></span>ASSISTANT</div>
+              <button class="msg-copy-btn">复制回复</button>
+            </div>
             <div class="message-content">${rendered}</div>
           `;
 
-          // 显示工具调用
           if (msg.tools && msg.tools.length > 0) {
             const contentEl = div.querySelector('.message-content');
             for (const tool of msg.tools) {
               const toolEl = document.createElement('details');
               toolEl.className = 'tool-call';
-              toolEl.innerHTML = `
-                <summary>🔧 ${this._escapeHtml(tool.name)}</summary>
-                <pre><code>${this._escapeHtml(JSON.stringify(tool.input, null, 2))}</code></pre>
-              `;
+              toolEl.innerHTML = `<summary>🔧 ${this._escapeHtml(tool.name)}</summary><pre><code>${this._escapeHtml(JSON.stringify(tool.input, null, 2))}</code></pre>`;
               contentEl.appendChild(toolEl);
             }
           }
 
           this.messagesList.appendChild(div);
-
-          // 代码高亮
-          div.querySelectorAll('pre code:not(.hljs)').forEach(block => {
-            hljs.highlightElement(block);
-          });
+          div.querySelectorAll('pre code:not(.hljs)').forEach(block => hljs.highlightElement(block));
         } else if (msg.role === 'system' && msg.type === 'result') {
           lastCost = msg;
         }
       }
 
-      // 在最后添加费用信息
       if (lastCost) {
         const metaEl = document.createElement('div');
         metaEl.className = 'message-meta session-meta';
@@ -332,7 +368,6 @@ class ChatModule {
   }
 
   _addUserMessage(text) {
-    // 移除欢迎消息
     const welcome = this.messagesList.querySelector('.welcome-message');
     if (welcome) welcome.remove();
 
@@ -348,11 +383,13 @@ class ChatModule {
 
   _ensureBubble() {
     if (this.currentBubbleEl) return;
-
     const div = document.createElement('div');
     div.className = 'message message-assistant';
     div.innerHTML = `
-      <div class="message-role"><span class="role-dot"></span>ASSISTANT</div>
+      <div class="message-header">
+        <div class="message-role"><span class="role-dot"></span>ASSISTANT</div>
+        <button class="msg-copy-btn">复制回复</button>
+      </div>
       <div class="message-content"></div>
     `;
     this.messagesList.appendChild(div);
@@ -364,53 +401,55 @@ class ChatModule {
   _scheduleRender() {
     if (this.renderScheduled) return;
     this.renderScheduled = true;
-    requestAnimationFrame(() => {
-      this._doRender();
-      this.renderScheduled = false;
-    });
+    requestAnimationFrame(() => { this._doRender(); this.renderScheduled = false; });
   }
 
   _doRender() {
     if (!this.currentBubbleEl) return;
     const contentEl = this.currentBubbleEl.querySelector('.message-content');
-
-    // 渲染 Markdown 并处理文件路径
     const html = this._renderMarkdownWithPaths(this.rawText);
     contentEl.innerHTML = html;
 
-    // 代码高亮
-    contentEl.querySelectorAll('pre code:not(.hljs)').forEach(block => {
-      hljs.highlightElement(block);
+    // 代码块：添加语言标签 + 复制按钮
+    contentEl.querySelectorAll('pre:not(.has-lang)').forEach(pre => {
+      pre.classList.add('has-lang');
+      const codeEl = pre.querySelector('code');
+      if (codeEl) {
+        // 检测语言
+        const langClass = [...codeEl.classList].find(c => c.startsWith('language-'));
+        const lang = langClass ? langClass.replace('language-', '') : '';
+        if (!codeEl.classList.contains('hljs')) hljs.highlightElement(codeEl);
+        // 从 hljs 结果推断语言
+        const detectedLang = lang || codeEl.dataset?.language || codeEl.className.match(/language-(\w+)/)?.[1] || '';
+        if (detectedLang) {
+          const labelEl = document.createElement('span');
+          labelEl.className = 'code-lang-label';
+          labelEl.textContent = detectedLang;
+          pre.appendChild(labelEl);
+        }
+      }
+      // 复制按钮
+      if (!pre.querySelector('.code-copy-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'code-copy-btn';
+        btn.textContent = '复制';
+        btn.onclick = () => {
+          const code = pre.querySelector('code')?.textContent || '';
+          navigator.clipboard.writeText(code);
+          btn.textContent = '已复制';
+          setTimeout(() => btn.textContent = '复制', 1500);
+        };
+        pre.appendChild(btn);
+      }
     });
 
-    // 添加复制按钮
-    contentEl.querySelectorAll('pre:not(.has-copy)').forEach(pre => {
-      pre.classList.add('has-copy');
-      const btn = document.createElement('button');
-      btn.className = 'code-copy-btn';
-      btn.textContent = '复制';
-      btn.onclick = () => {
-        const code = pre.querySelector('code')?.textContent || '';
-        navigator.clipboard.writeText(code);
-        btn.textContent = '已复制';
-        setTimeout(() => btn.textContent = '复制', 1500);
-      };
-      pre.appendChild(btn);
-    });
-
-    if (!this.userScrolled) {
-      this._scrollToBottom();
-    }
+    if (!this.userScrolled) this._scrollToBottom();
   }
 
-  // 渲染 Markdown 并将文件路径转换为可点击链接
   _renderMarkdownWithPaths(text) {
     const html = DOMPurify.sanitize(marked.parse(text));
-    // 匹配绝对路径（以 / 开头，包含至少两层目录）
-    // 但不处理 code 和 pre 内的路径
     const pathRegex = /(?<!["`'])(\/(Users|home|tmp|var|etc|opt)[^\s<>"'`\)]*\.\w+)(?!["`'])/g;
     return html.replace(pathRegex, (match, path) => {
-      // 确保不在 <code> 或 <pre> 标签内（简单启发式）
       return `<a class="clickable-path" data-path="${this._escapeHtml(path)}" title="点击在文件浏览器中打开">${this._escapeHtml(path)}</a>`;
     });
   }
@@ -433,10 +472,7 @@ class ChatModule {
     const contentEl = this.currentBubbleEl.querySelector('.message-content');
     const toolEl = document.createElement('details');
     toolEl.className = 'tool-call';
-    toolEl.innerHTML = `
-      <summary>🔧 ${this._escapeHtml(name)}</summary>
-      <pre><code>${this._escapeHtml(JSON.stringify(input, null, 2))}</code></pre>
-    `;
+    toolEl.innerHTML = `<summary>🔧 ${this._escapeHtml(name)}</summary><pre><code>${this._escapeHtml(JSON.stringify(input, null, 2))}</code></pre>`;
     contentEl.appendChild(toolEl);
   }
 
@@ -454,43 +490,33 @@ class ChatModule {
     this.chatInput.disabled = false;
     this.chatInput.focus();
 
-    // 添加元信息
     if (this.currentBubbleEl && cost !== undefined) {
       const metaEl = document.createElement('div');
       metaEl.className = 'message-meta';
       metaEl.textContent = `⏱ ${(duration / 1000).toFixed(1)}s · 💰 $${cost.toFixed(4)}`;
       this.currentBubbleEl.appendChild(metaEl);
     }
-
     this.currentBubbleEl = null;
-    this._doRender(); // 最终渲染
+    this._doRender();
   }
 
-  // 操作连贯性：通知文件浏览器可能有变化
   _notifyFileChange() {
-    // 如果当前在文件视图或对话中涉及文件操作，显示刷新提示
     if (App.currentView === 'files') {
       App.modules.files.loadDirectory(App.modules.files.currentPath);
     } else {
-      // 标记文件浏览器需要刷新
       App.modules.files._needsRefresh = true;
     }
   }
 
-  // 点击文件路径跳转到文件浏览器
   _openFilePath(filePath) {
     const isFile = /\.\w+$/.test(filePath);
     if (isFile) {
-      // 提取目录路径
       const dirPath = filePath.substring(0, filePath.lastIndexOf('/'));
       App.switchView('files');
       App.modules.files.loadDirectory(dirPath).then(() => {
-        // 尝试高亮并打开目标文件
         setTimeout(() => {
           App.modules.files.loadFile(filePath);
-          // 高亮文件项
-          const items = document.querySelectorAll('.file-item');
-          items.forEach(el => {
+          document.querySelectorAll('.file-item').forEach(el => {
             el.classList.toggle('active', el.dataset.path === filePath);
           });
         }, 300);

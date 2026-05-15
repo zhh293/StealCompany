@@ -1,10 +1,13 @@
 const ClaudeCodeSession = require('../services/claudeCode');
+const auditLog = require('../services/auditLog');
+const { recordUsage } = require('../routes/usage');
 
 const activeSessions = new Map();
 
 module.exports = function (nsp) {
   nsp.on('connection', (socket) => {
-    console.log(`[Chat] 客户端连接: ${socket.id}`);
+    const user = socket.user?.username || 'unknown';
+    console.log(`[Chat] 客户端连接: ${socket.id} (${user})`);
 
     socket.on('chat:send', ({ prompt, sessionId, workDir, model }) => {
       if (!prompt || !prompt.trim()) {
@@ -18,6 +21,8 @@ module.exports = function (nsp) {
         existing.stop();
         activeSessions.delete(socket.id);
       }
+
+      auditLog.log({ user, action: 'chat_send', detail: `model=${model || 'default'} prompt=${prompt.slice(0, 100)}` });
 
       const session = new ClaudeCodeSession({
         sessionId: sessionId || null,
@@ -35,6 +40,18 @@ module.exports = function (nsp) {
       session.on('result', (data) => {
         socket.emit('chat:done', data);
         activeSessions.delete(socket.id);
+
+        // 记录用量统计
+        try {
+          recordUsage({
+            model: model || 'default',
+            cost: data.cost || 0,
+            tokens: data.tokens || 0,
+            duration: data.duration || 0,
+          });
+        } catch (err) {
+          // 统计失败不影响主流程
+        }
       });
 
       session.on('error', (data) => {

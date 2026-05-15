@@ -9,7 +9,8 @@
   <!-- xterm.js -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <!-- highlight.js -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css" id="hljs-theme-dark">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css" id="hljs-theme-light" disabled>
   <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
@@ -21,26 +22,26 @@
         <div class="logo-mark">⚡</div>
       </div>
       <div class="sidebar-nav">
-        <button class="nav-item active" data-view="chat" title="AI 对话">
+        <button class="nav-item active" data-view="chat" title="AI 对话 (⌘1)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
           <span class="nav-label">对话</span>
         </button>
-        <button class="nav-item" data-view="terminal" title="终端">
+        <button class="nav-item" data-view="terminal" title="终端 (⌘2)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <polyline points="4 17 10 11 4 5"/>
             <line x1="12" y1="19" x2="20" y2="19"/>
           </svg>
           <span class="nav-label">终端</span>
         </button>
-        <button class="nav-item" data-view="files" title="文件">
+        <button class="nav-item" data-view="files" title="文件 (⌘3)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
           <span class="nav-label">文件</span>
         </button>
-        <button class="nav-item" data-view="dashboard" title="状态">
+        <button class="nav-item" data-view="dashboard" title="状态 (⌘4)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <rect x="3" y="3" width="7" height="7" rx="1"/>
             <rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -51,6 +52,11 @@
         </button>
       </div>
       <div class="sidebar-bottom">
+        <button class="nav-item" id="btnThemeToggle" title="切换主题">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" id="themeIcon">
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+        </button>
         <button class="nav-item" id="btnLogout" title="退出登录">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -70,11 +76,18 @@
           <aside class="chat-sidebar" id="chatSidebar">
             <div class="chat-sidebar-header">
               <h3>会话</h3>
-              <button class="btn-icon" id="btnNewChat" title="新建会话">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-              </button>
+              <div class="chat-sidebar-actions">
+                <button class="btn-icon" id="btnExportChat" title="导出当前对话">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                </button>
+                <button class="btn-icon" id="btnNewChat" title="新建会话 (⌘N)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="session-list" id="sessionList">
               <!-- 动态填充 -->
@@ -105,6 +118,11 @@
                     <span class="tip">代码高亮</span>
                     <span class="tip">会话恢复</span>
                   </div>
+                  <div class="shortcut-hints">
+                    <span class="shortcut-hint"><kbd>⌘K</kbd> 快速切换</span>
+                    <span class="shortcut-hint"><kbd>⌘N</kbd> 新对话</span>
+                    <span class="shortcut-hint"><kbd>⌘Enter</kbd> 发送</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -132,8 +150,11 @@
                   </select>
                 </label>
               </div>
-              <div class="input-wrapper">
-                <textarea id="chatInput" placeholder="输入你的问题... (Enter 发送, Shift+Enter 换行)" rows="1"></textarea>
+              <div class="input-wrapper" id="inputWrapper">
+                <div class="drop-overlay hidden" id="dropOverlay">
+                  <span>📎 拖放文件以附加路径</span>
+                </div>
+                <textarea id="chatInput" placeholder="输入你的问题... (Enter 发送, Shift+Enter 换行, 可拖入文件)" rows="1"></textarea>
                 <button class="btn-send" id="btnSend" title="发送 (Enter)">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -156,7 +177,7 @@
           <div class="terminal-tabs" id="terminalTabs">
             <!-- 动态生成 -->
           </div>
-          <button class="btn-icon" id="btnNewTerminal" title="新建终端">
+          <button class="btn-icon" id="btnNewTerminal" title="新建终端 (⌘T)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
@@ -189,14 +210,35 @@
       <section class="view view-dashboard" id="view-dashboard">
         <div class="dashboard-header">
           <h2>系统状态</h2>
-          <button class="btn-icon" id="btnRefreshDashboard" title="刷新">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-          </button>
+          <div class="dashboard-header-actions">
+            <button class="btn-icon" id="btnShowUsage" title="用量统计">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+            </button>
+            <button class="btn-icon" id="btnShowAudit" title="审计日志">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+            </button>
+            <button class="btn-icon" id="btnRefreshDashboard" title="刷新">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="dashboard-content">
           <div class="stats-grid" id="statsGrid"></div>
+          <div class="usage-panel hidden" id="usagePanel">
+            <h3>用量统计</h3>
+            <div class="usage-chart" id="usageChart"></div>
+            <div class="usage-details" id="usageDetails"></div>
+          </div>
+          <div class="audit-panel hidden" id="auditPanel">
+            <h3>操作审计日志</h3>
+            <div class="audit-list" id="auditList"></div>
+          </div>
           <div class="sessions-panel">
             <h3>活跃会话</h3>
             <div class="dashboard-sessions" id="dashboardSessions"></div>
@@ -208,6 +250,12 @@
 
   <!-- Toast 通知 -->
   <div class="toast-container" id="toastContainer"></div>
+
+  <!-- 长按上下文菜单 -->
+  <div class="context-menu hidden" id="contextMenu">
+    <button class="context-menu-item" data-action="copy">复制消息</button>
+    <button class="context-menu-item" data-action="export">导出为 Markdown</button>
+  </div>
 
   <!-- 脚本 -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>

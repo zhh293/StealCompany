@@ -7,12 +7,22 @@ const cors = require('cors');
 const config = require('./config');
 const { authMiddleware } = require('./middleware/auth');
 const { apiLimiter } = require('./middleware/rateLimiter');
+const auditLog = require('./services/auditLog');
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
   maxHttpBufferSize: 1e7,
+  // Socket 消息压缩
+  perMessageDeflate: {
+    threshold: 1024, // 仅压缩超过 1KB 的消息
+    zlibDeflateOptions: { chunkSize: 16 * 1024 },
+    zlibInflateOptions: { chunkSize: 16 * 1024 },
+  },
+  // 心跳保活
+  pingInterval: 10000,
+  pingTimeout: 5000,
 });
 
 // 安全头部（允许 CDN 加载）
@@ -34,6 +44,12 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api', authMiddleware, require('./routes/sessions'));
 app.use('/api', authMiddleware, require('./routes/files'));
 app.use('/api', authMiddleware, require('./routes/settings'));
+
+// 审计日志路由
+app.use('/api', authMiddleware, require('./routes/audit'));
+
+// 用量统计路由
+app.use('/api', authMiddleware, require('./routes/usage'));
 
 // SPA fallback (Express 5 需要命名通配符)
 app.get('{*path}', (req, res) => {
