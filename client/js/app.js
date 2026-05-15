@@ -11,12 +11,14 @@ const App = {
     this._applyTheme(this.theme);
 
     // 初始化各模块
+    this.modules.workspace = new WorkspaceModule();
     this.modules.chat = new ChatModule();
     this.modules.terminal = new TerminalModule();
     this.modules.files = new FilesModule();
     this.modules.dashboard = new DashboardModule();
 
-    // 启动模块
+    // 启动模块（workspace 先初始化）
+    this.modules.workspace.init();
     this.modules.chat.init();
     this.modules.terminal.init();
     this.modules.files.init();

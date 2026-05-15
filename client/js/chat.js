@@ -18,7 +18,6 @@ class ChatModule {
     this.chatTitle = document.getElementById('chatTitle');
     this.chatMeta = document.getElementById('chatMeta');
     this.sessionList = document.getElementById('sessionList');
-    this.workDirSelect = document.getElementById('workDirSelect');
     this.modelSelect = document.getElementById('modelSelect');
   }
 
@@ -34,7 +33,6 @@ class ChatModule {
     this._bindUIEvents();
     this._bindDragDrop();
     this._bindExport();
-    this._loadWorkDirs();
     this._loadSessions();
   }
 
@@ -110,8 +108,6 @@ class ChatModule {
       document.getElementById('chatSidebar').classList.toggle('hidden');
     });
 
-    this.workDirSelect.addEventListener('change', () => { this._loadSessions(); this.newChat(); });
-
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.isGenerating) this.stop();
     });
@@ -183,7 +179,7 @@ class ChatModule {
 
     let md = `# CatDesk 对话记录\n\n`;
     md += `- 时间: ${new Date().toLocaleString('zh-CN')}\n`;
-    md += `- 工作目录: ${this.workDirSelect.value}\n`;
+    md += `- 工作目录: ${this._getWorkDir()}\n`;
     md += `- 模型: ${this.modelSelect.value || '默认'}\n\n---\n\n`;
 
     for (const msg of this.messages) {
@@ -206,24 +202,14 @@ class ChatModule {
     App.toast('对话已导出为 Markdown', 'success');
   }
 
-  async _loadWorkDirs() {
-    try {
-      const res = await Auth.fetch('/api/settings/workspace-dirs');
-      const data = await res.json();
-      const dirs = data.data.allowedDirs || [];
-      const home = dirs[0]?.match(/^\/Users\/[^/]+/)?.[0] || '';
-      this.workDirSelect.innerHTML = dirs.map(d => {
-        const label = home ? d.replace(home, '~') : d;
-        return `<option value="${d}" ${d === data.data.defaultWorkspace ? 'selected' : ''}>${label}</option>`;
-      }).join('');
-    } catch (err) {
-      this.workDirSelect.innerHTML = `<option value="/Users/zhanghonghao/Desktop">~/Desktop</option>`;
-    }
+  // 获取当前工作目录（从 workspace 模块）
+  _getWorkDir() {
+    return App.modules.workspace ? App.modules.workspace.getWorkDir() : '';
   }
 
   async _loadSessions() {
     try {
-      const workDir = this.workDirSelect.value;
+      const workDir = this._getWorkDir();
       const url = workDir ? `/api/sessions?workDir=${encodeURIComponent(workDir)}` : '/api/sessions';
       const res = await Auth.fetch(url);
       const data = await res.json();
@@ -262,7 +248,7 @@ class ChatModule {
     this.socket.emit('chat:send', {
       prompt,
       sessionId: this.currentSessionId,
-      workDir: this.workDirSelect.value,
+      workDir: this._getWorkDir(),
       model,
     });
   }

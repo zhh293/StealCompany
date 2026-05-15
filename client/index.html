@@ -130,12 +130,27 @@
             <!-- 输入区 -->
             <div class="chat-input-area">
               <div class="input-toolbar">
-                <label class="workdir-selector" title="工作目录">
+                <div class="workspace-selector" id="workspaceSelector" title="工作目录">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                   </svg>
-                  <select id="workDirSelect"></select>
-                </label>
+                  <input type="text" id="workDirInput" class="workspace-input" placeholder="选择工作目录..." autocomplete="off">
+                  <button class="workspace-browse-btn" id="btnBrowseWorkspace" title="浏览目录">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                  </button>
+                  <button class="workspace-toggle-tree-btn" id="btnToggleFileTree" title="显示/隐藏文件树">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </button>
+                  <!-- 历史下拉 -->
+                  <div class="workspace-dropdown hidden" id="workspaceDropdown">
+                    <div class="workspace-dropdown-header">最近工作区</div>
+                    <div class="workspace-dropdown-list" id="workspaceHistoryList"></div>
+                  </div>
+                </div>
                 <label class="model-selector" title="选择模型">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
@@ -168,8 +183,44 @@
               </div>
             </div>
           </div>
+
+          <!-- 右侧文件树面板 -->
+          <aside class="file-tree-panel hidden" id="fileTreePanel">
+            <div class="file-tree-header">
+              <span class="file-tree-title" id="fileTreeTitle">工作区文件</span>
+              <button class="btn-icon file-tree-close" id="btnCloseFileTree" title="关闭文件树">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div class="file-tree-content" id="fileTreeContent">
+              <div class="empty-state">选择工作区后显示文件树</div>
+            </div>
+          </aside>
         </div>
       </section>
+
+      <!-- 目录选择器模态框 -->
+      <div class="dir-browser-modal hidden" id="dirBrowserModal">
+        <div class="dir-browser-overlay"></div>
+        <div class="dir-browser-panel">
+          <div class="dir-browser-header">
+            <h3>选择工作目录</h3>
+            <button class="btn-icon" id="btnCloseDirBrowser">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="dir-browser-path" id="dirBrowserPath"></div>
+          <div class="dir-browser-list" id="dirBrowserList"></div>
+          <div class="dir-browser-footer">
+            <button class="dir-browser-btn-cancel" id="btnDirBrowserCancel">取消</button>
+            <button class="dir-browser-btn-confirm" id="btnDirBrowserConfirm">选择此目录</button>
+          </div>
+        </div>
+      </div>
 
       <!-- ===== 终端视图 ===== -->
       <section class="view view-terminal" id="view-terminal">
@@ -266,6 +317,7 @@
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.0/dist/purify.min.js"></script>
   <script src="/js/utils/storage.js"></script>
   <script src="/js/auth.js"></script>
+  <script src="/js/workspace.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/terminal.js"></script>
   <script src="/js/files.js"></script>

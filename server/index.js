@@ -44,6 +44,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api', authMiddleware, require('./routes/sessions'));
 app.use('/api', authMiddleware, require('./routes/files'));
 app.use('/api', authMiddleware, require('./routes/settings'));
+app.use('/api', authMiddleware, require('./routes/workspace'));
 
 // 审计日志路由
 app.use('/api', authMiddleware, require('./routes/audit'));

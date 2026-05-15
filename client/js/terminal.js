@@ -223,6 +223,15 @@ class TerminalModule {
     setTimeout(() => hint.remove(), 10000);
   }
 
+  // 工作区切换时 cd 到新目录
+  cdToWorkspace(dirPath) {
+    if (!dirPath || !this.activeTerminalId) return;
+    this.socket.emit('terminal:input', {
+      id: this.activeTerminalId,
+      data: `cd ${dirPath.replace(/ /g, '\\ ')}\r`,
+    });
+  }
+
   // 当终端视图变为可见时调用
   onShow() {
     if (this.socket && !this.socket.connected) {
