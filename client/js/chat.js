@@ -9,6 +9,8 @@ class ChatModule {
     this.rawText = '';
     this.renderScheduled = false;
     this.userScrolled = false;
+    this.permissionMode = 'auto'; // 'auto' | 'manual'
+    this._permissionTimerInterval = null;
 
     this.messagesList = document.getElementById('messagesList');
     this.messagesContainer = document.getElementById('messagesContainer');
@@ -33,7 +35,9 @@ class ChatModule {
     this._bindUIEvents();
     this._bindDragDrop();
     this._bindExport();
+    this._bindPermissionToggle();
     this._loadSessions();
+    this._loadPermissionMode();
   }
 
   _bindSocketEvents() {
@@ -80,6 +84,16 @@ class ChatModule {
     this.socket.on('chat:stopped', () => {
       this._finishGeneration();
       App.toast('已停止生成', 'info');
+    });
+
+    // 权限确认请求
+    this.socket.on('chat:permission_request', (data) => {
+      this._showPermissionModal(data);
+    });
+
+    this.socket.on('chat:permission_timeout', ({ id }) => {
+      this._hidePermissionModal();
+      App.toast('权限确认超时，已自动拒绝', 'warning');
     });
 
     this.socket.on('disconnect', () => console.log('[Chat] Disconnected'));
@@ -524,5 +538,144 @@ class ChatModule {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ===== 权限模式管理 =====
+  async _loadPermissionMode() {
+    try {
+      const res = await Auth.fetch('/api/settings/permission-mode');
+      const data = await res.json();
+      this.permissionMode = data.data.permissionMode || 'auto';
+      this._updatePermissionUI();
+    } catch (err) {
+      this.permissionMode = 'auto';
+      this._updatePermissionUI();
+    }
+  }
+
+  _bindPermissionToggle() {
+    const toggle = document.getElementById('permissionModeSwitch');
+    if (!toggle) return;
+
+    toggle.addEventListener('change', async () => {
+      const newMode = toggle.checked ? 'auto' : 'manual';
+      try {
+        const res = await Auth.fetch('/api/settings/permission-mode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: newMode }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          App.toast(data.error.message, 'error');
+          toggle.checked = this.permissionMode === 'auto';
+          return;
+        }
+        this.permissionMode = data.data.permissionMode;
+        this._updatePermissionUI();
+        App.toast(`权限模式: ${this.permissionMode === 'auto' ? '自动批准' : '手动确认'}`, 'info');
+      } catch (err) {
+        App.toast('切换权限模式失败', 'error');
+        toggle.checked = this.permissionMode === 'auto';
+      }
+    });
+
+    // 权限确认弹窗按钮
+    document.getElementById('btnPermissionAllow').addEventListener('click', () => {
+      this._respondPermission(true);
+    });
+    document.getElementById('btnPermissionDeny').addEventListener('click', () => {
+      this._respondPermission(false);
+    });
+  }
+
+  _updatePermissionUI() {
+    const toggle = document.getElementById('permissionModeSwitch');
+    const label = document.getElementById('permissionModeLabel');
+    if (toggle) toggle.checked = this.permissionMode === 'auto';
+    if (label) {
+      label.textContent = this.permissionMode === 'auto' ? '自动批准' : '手动确认';
+      label.className = `toggle-label ${this.permissionMode === 'manual' ? 'mode-manual' : ''}`;
+    }
+  }
+
+  // ===== 权限确认弹窗 =====
+  _showPermissionModal(data) {
+    const modal = document.getElementById('permissionModal');
+    const toolEl = document.getElementById('permissionTool');
+    const descEl = document.getElementById('permissionDesc');
+    const inputEl = document.getElementById('permissionInput');
+    const timerEl = document.getElementById('permissionTimer');
+
+    this._currentPermissionId = data.id;
+
+    // 工具名 + 风险等级
+    const riskIcons = { low: '🟢', medium: '🟡', high: '🔴' };
+    const riskLabels = { low: '低风险', medium: '中风险', high: '高风险' };
+    toolEl.innerHTML = `
+      <span class="perm-tool-name">🔧 ${this._escapeHtml(data.tool)}</span>
+      <span class="perm-risk perm-risk-${data.risk}">${riskIcons[data.risk] || '🟡'} ${riskLabels[data.risk] || '中风险'}</span>
+    `;
+
+    descEl.textContent = data.description || '该工具请求执行权限';
+    inputEl.textContent = typeof data.input === 'string' ? data.input : JSON.stringify(data.input, null, 2);
+
+    // 倒计时
+    let remaining = 30;
+    timerEl.textContent = `${remaining}s`;
+    timerEl.className = 'permission-timer';
+
+    if (this._permissionTimerInterval) clearInterval(this._permissionTimerInterval);
+    this._permissionTimerInterval = setInterval(() => {
+      remaining--;
+      timerEl.textContent = `${remaining}s`;
+      if (remaining <= 10) timerEl.className = 'permission-timer timer-urgent';
+      if (remaining <= 0) {
+        clearInterval(this._permissionTimerInterval);
+        this._permissionTimerInterval = null;
+      }
+    }, 1000);
+
+    modal.classList.remove('hidden');
+
+    // 在消息流中也添加提示
+    this._addPermissionHint(data);
+
+    // 震动 / 声音提醒（如果支持）
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  }
+
+  _hidePermissionModal() {
+    const modal = document.getElementById('permissionModal');
+    modal.classList.add('hidden');
+    if (this._permissionTimerInterval) {
+      clearInterval(this._permissionTimerInterval);
+      this._permissionTimerInterval = null;
+    }
+    this._currentPermissionId = null;
+  }
+
+  _respondPermission(allow) {
+    if (!this._currentPermissionId) return;
+    this.socket.emit('chat:permission_response', {
+      requestId: this._currentPermissionId,
+      allow,
+    });
+    this._hidePermissionModal();
+    App.toast(allow ? '已允许执行' : '已拒绝操作', allow ? 'success' : 'info');
+  }
+
+  _addPermissionHint(data) {
+    if (!this.currentBubbleEl) return;
+    const contentEl = this.currentBubbleEl.querySelector('.message-content');
+    const hintEl = document.createElement('div');
+    hintEl.className = `permission-hint ${data.risk === 'high' ? 'hint-danger' : ''}`;
+    hintEl.innerHTML = `
+      <span class="hint-badge">⏳ 等待确认</span>
+      <span class="hint-tool">${this._escapeHtml(data.tool)}</span>
+      <span class="hint-desc">${this._escapeHtml(data.description || '')}</span>
+    `;
+    contentEl.appendChild(hintEl);
+    this._scrollToBottom();
   }
 }

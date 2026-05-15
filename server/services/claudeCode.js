@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 const path = require('path');
+const { getPermissionMode } = require('./permissionSettings');
 
 // 确保 PATH 包含常见的 bin 目录（Node 子进程可能缺失）
 const extraPaths = ['/usr/local/bin', '/opt/homebrew/bin', path.join(process.env.HOME || '', '.local/bin')];
@@ -14,6 +15,8 @@ class ClaudeCodeSession extends EventEmitter {
     this.model = options.model || null;
     this.process = null;
     this.killed = false;
+    this.permissionMode = options.permissionMode || getPermissionMode();
+    this._pendingPermission = null; // 当前待确认的权限请求
   }
 
   send(prompt) {
@@ -21,8 +24,14 @@ class ClaudeCodeSession extends EventEmitter {
       '--code', '-p', prompt,
       '--output-format', 'stream-json',
       '--verbose',
-      '--include-partial-messages',  // 启用逐 token 流式输出
+      '--include-partial-messages',
     ];
+
+    // 权限模式
+    if (this.permissionMode === 'auto') {
+      args.push('--dangerously-skip-permissions');
+    }
+    // manual 模式不加跳过参数，使用 stream-json 双向交互
 
     if (this.model) {
       args.push('--model', this.model);
@@ -32,10 +41,16 @@ class ClaudeCodeSession extends EventEmitter {
       args.push('--resume', this.sessionId);
     }
 
+    // manual 模式需要双向流式通信
+    if (this.permissionMode === 'manual') {
+      args.push('--input-format', 'stream-json');
+    }
+
     this.killed = false;
     this.process = spawn('mc', args, {
       cwd: this.workDir,
       env: { ...process.env, PATH: fullPath, TERM: 'dumb' },
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     let buffer = '';
@@ -79,6 +94,32 @@ class ClaudeCodeSession extends EventEmitter {
     });
   }
 
+  /**
+   * 用户对权限请求的响应
+   * @param {string} requestId - 请求 ID
+   * @param {boolean} allow - 是否允许
+   */
+  respondToPermission(requestId, allow) {
+    if (!this.process || this.process.killed) return;
+    if (!this._pendingPermission || this._pendingPermission.id !== requestId) return;
+
+    // 向 Claude Code stdin 写入确认响应
+    // stream-json input 格式的权限响应
+    const response = JSON.stringify({
+      type: 'permission_response',
+      id: requestId,
+      allow: allow,
+    }) + '\n';
+
+    try {
+      this.process.stdin.write(response);
+    } catch (e) {
+      this.emit('error', { message: `写入权限响应失败: ${e.message}` });
+    }
+
+    this._pendingPermission = null;
+  }
+
   _handleEvent(event) {
     switch (event.type) {
       case 'system':
@@ -97,10 +138,13 @@ class ClaudeCodeSession extends EventEmitter {
         this._handleStreamEvent(event.event);
         break;
 
+      // 权限确认请求（Claude Code 在 manual 模式下会发送）
+      case 'permission_request':
+        this._handlePermissionRequest(event);
+        break;
+
       // 完整消息（作为 fallback，在 stream_event 完成后也会收到）
       case 'assistant':
-        // 当使用 --include-partial-messages 时，assistant 事件作为最终确认
-        // 不需要再次 emit text，因为 delta 已经逐步发送了
         if (event.message?.content) {
           for (const block of event.message.content) {
             if (block.type === 'tool_use') {
@@ -139,12 +183,32 @@ class ClaudeCodeSession extends EventEmitter {
     }
   }
 
+  _handlePermissionRequest(event) {
+    const request = {
+      id: event.id || `perm_${Date.now()}`,
+      tool: event.tool || event.tool_name || 'unknown',
+      description: event.description || event.message || '',
+      input: event.input || event.tool_input || {},
+      risk: event.risk || 'medium',
+    };
+
+    this._pendingPermission = request;
+    this.emit('permission_request', request);
+
+    // 如果 30 秒内没有响应，自动拒绝
+    setTimeout(() => {
+      if (this._pendingPermission && this._pendingPermission.id === request.id) {
+        this.respondToPermission(request.id, false);
+        this.emit('permission_timeout', { id: request.id });
+      }
+    }, 30000);
+  }
+
   _handleStreamEvent(streamEvent) {
     if (!streamEvent) return;
 
     switch (streamEvent.type) {
       case 'content_block_start':
-        // 新 block 开始（thinking 或 text）
         if (streamEvent.content_block?.type === 'thinking') {
           this.emit('thinking_start', {});
         } else if (streamEvent.content_block?.type === 'text') {
@@ -161,19 +225,15 @@ class ClaudeCodeSession extends EventEmitter {
         break;
 
       case 'content_block_stop':
-        // block 结束
         break;
 
       case 'message_start':
-        // 消息开始
         break;
 
       case 'message_delta':
-        // 消息元信息更新（stop_reason 等）
         break;
 
       case 'message_stop':
-        // 消息完成
         break;
     }
   }

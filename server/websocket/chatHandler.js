@@ -1,6 +1,7 @@
 const ClaudeCodeSession = require('../services/claudeCode');
 const auditLog = require('../services/auditLog');
 const { recordUsage } = require('../routes/usage');
+const { getPermissionMode } = require('../services/permissionSettings');
 
 const activeSessions = new Map();
 
@@ -22,12 +23,14 @@ module.exports = function (nsp) {
         activeSessions.delete(socket.id);
       }
 
-      auditLog.log({ user, action: 'chat_send', detail: `model=${model || 'default'} prompt=${prompt.slice(0, 100)}` });
+      const permissionMode = getPermissionMode();
+      auditLog.log({ user, action: 'chat_send', detail: `model=${model || 'default'} mode=${permissionMode} prompt=${prompt.slice(0, 100)}` });
 
       const session = new ClaudeCodeSession({
         sessionId: sessionId || null,
         workDir: workDir || process.env.HOME,
         model: model || null,
+        permissionMode,
       });
       activeSessions.set(socket.id, session);
 
@@ -37,11 +40,21 @@ module.exports = function (nsp) {
       session.on('tool_use', (data) => socket.emit('chat:tool', data));
       session.on('tool_result', (data) => socket.emit('chat:tool_result', data));
 
+      // 权限请求转发到前端
+      session.on('permission_request', (data) => {
+        socket.emit('chat:permission_request', data);
+        auditLog.log({ user, action: 'permission_request', detail: `tool=${data.tool} desc=${(data.description || '').slice(0, 100)}` });
+      });
+
+      session.on('permission_timeout', (data) => {
+        socket.emit('chat:permission_timeout', data);
+        auditLog.log({ user, action: 'permission_timeout', detail: `id=${data.id}` });
+      });
+
       session.on('result', (data) => {
         socket.emit('chat:done', data);
         activeSessions.delete(socket.id);
 
-        // 记录用量统计
         try {
           recordUsage({
             model: model || 'default',
@@ -49,9 +62,7 @@ module.exports = function (nsp) {
             tokens: data.tokens || 0,
             duration: data.duration || 0,
           });
-        } catch (err) {
-          // 统计失败不影响主流程
-        }
+        } catch (err) {}
       });
 
       session.on('error', (data) => {
@@ -66,6 +77,15 @@ module.exports = function (nsp) {
       });
 
       session.send(prompt);
+    });
+
+    // 前端发送权限确认响应
+    socket.on('chat:permission_response', ({ requestId, allow }) => {
+      const session = activeSessions.get(socket.id);
+      if (session) {
+        session.respondToPermission(requestId, allow);
+        auditLog.log({ user, action: 'permission_response', detail: `id=${requestId} allow=${allow}` });
+      }
     });
 
     socket.on('chat:stop', () => {

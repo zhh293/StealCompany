@@ -1,24 +1,53 @@
 const express = require('express');
-const catdesk = require('../services/catdesk');
 const config = require('../config');
 const fs = require('fs');
 const path = require('path');
+const permissionSettings = require('../services/permissionSettings');
 
 const router = express.Router();
 
 router.get('/settings', (req, res) => {
   try {
-    res.json({ data: { allowedDirs: config.allowedDirs, defaultWorkspace: config.defaultWorkspace } });
+    const permSettings = permissionSettings.load();
+    res.json({
+      data: {
+        allowedDirs: config.allowedDirs,
+        defaultWorkspace: config.defaultWorkspace,
+        permissionMode: permSettings.permissionMode,
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: { code: 'SETTINGS_ERROR', message: err.message } });
   }
 });
 
+// GET /api/settings/permission-mode — 获取当前权限模式
+router.get('/settings/permission-mode', (req, res) => {
+  try {
+    const mode = permissionSettings.getPermissionMode();
+    res.json({ data: { permissionMode: mode } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SETTINGS_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/settings/permission-mode — 设置权限模式
+router.post('/settings/permission-mode', (req, res) => {
+  try {
+    const { mode } = req.body;
+    if (!mode) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: '请提供 mode 参数' } });
+    }
+    const result = permissionSettings.setPermissionMode(mode);
+    res.json({ data: { permissionMode: result.permissionMode } });
+  } catch (err) {
+    res.status(400).json({ error: { code: 'INVALID_MODE', message: err.message } });
+  }
+});
+
 router.get('/settings/workspace-dirs', (req, res) => {
-  // 从配置的白名单 + 历史会话文件中的 cwd 字段合并出完整的工作区列表
   const dirs = new Set(config.allowedDirs);
 
-  // 从 ~/.claude/projects/ 下的 .jsonl 文件中提取真实 cwd 路径
   const claudeProjectsDir = path.join(process.env.HOME || '', '.claude', 'projects');
   try {
     if (fs.existsSync(claudeProjectsDir)) {
@@ -29,7 +58,6 @@ router.get('/settings/workspace-dirs', (req, res) => {
         const dirPath = path.join(claudeProjectsDir, dir.name);
         const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl'));
 
-        // 取每个项目目录下的第一个 .jsonl 文件，读取 cwd
         if (files.length > 0) {
           const filePath = path.join(dirPath, files[0]);
           const fd = fs.openSync(filePath, 'r');
@@ -44,7 +72,6 @@ router.get('/settings/workspace-dirs', (req, res) => {
             try {
               const obj = JSON.parse(line);
               if (obj.cwd) {
-                // 验证目录存在
                 if (fs.existsSync(obj.cwd) && fs.statSync(obj.cwd).isDirectory()) {
                   dirs.add(obj.cwd);
                 }
@@ -55,18 +82,15 @@ router.get('/settings/workspace-dirs', (req, res) => {
         }
       }
     }
-  } catch (e) {
-    // 静默忽略
-  }
+  } catch (e) {}
 
-  // 按路径排序
   const sortedDirs = [...dirs].sort();
 
   res.json({
     data: {
       allowedDirs: sortedDirs,
       defaultWorkspace: config.defaultWorkspace,
-    }
+    },
   });
 });
 

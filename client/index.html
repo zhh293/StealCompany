@@ -151,6 +151,13 @@
                     <div class="workspace-dropdown-list" id="workspaceHistoryList"></div>
                   </div>
                 </div>
+                <div class="permission-mode-toggle" id="permissionModeToggle" title="权限模式">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="permissionModeSwitch" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                  <span class="toggle-label" id="permissionModeLabel">自动批准</span>
+                </div>
                 <label class="model-selector" title="选择模型">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
@@ -200,6 +207,40 @@
           </aside>
         </div>
       </section>
+
+      <!-- 权限确认弹窗 -->
+      <div class="permission-modal hidden" id="permissionModal">
+        <div class="permission-overlay"></div>
+        <div class="permission-panel">
+          <div class="permission-header">
+            <span class="permission-icon">🔐</span>
+            <h3>操作权限确认</h3>
+            <div class="permission-timer" id="permissionTimer">30s</div>
+          </div>
+          <div class="permission-body">
+            <div class="permission-tool" id="permissionTool"></div>
+            <div class="permission-desc" id="permissionDesc"></div>
+            <details class="permission-details">
+              <summary>详细信息</summary>
+              <pre class="permission-input" id="permissionInput"></pre>
+            </details>
+          </div>
+          <div class="permission-footer">
+            <button class="permission-btn-deny" id="btnPermissionDeny">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+              拒绝
+            </button>
+            <button class="permission-btn-allow" id="btnPermissionAllow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              允许执行
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- 目录选择器模态框 -->
       <div class="dir-browser-modal hidden" id="dirBrowserModal">
