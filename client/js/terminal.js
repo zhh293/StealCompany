@@ -181,7 +181,8 @@ class TerminalModule {
   // 命令执行完毕的回调 — 操作连贯性
   _onCommandDone(cmd) {
     // 判断是否可能影响文件系统的命令
-    const fileOps = ['touch', 'mkdir', 'rm', 'mv', 'cp', 'git', 'npm', 'yarn', 'pnpm', 'wget', 'curl', 'unzip', 'tar'];
+    const fileOps = ['touch', 'mkdir', 'rm', 'mv', 'cp', 'git', 'npm', 'yarn', 'pnpm', 'wget', 'curl', 'unzip', 'tar',
+      'del', 'move', 'copy', 'ren', 'xcopy', 'robocopy', 'rd', 'md', 'erase'];
     const isFileOp = fileOps.some(op => cmd.startsWith(op + ' ') || cmd === op);
 
     if (isFileOp) {
@@ -226,9 +227,11 @@ class TerminalModule {
   // 工作区切换时 cd 到新目录
   cdToWorkspace(dirPath) {
     if (!dirPath || !this.activeTerminalId) return;
+    const isWinPath = /^[A-Z]:\\/i.test(dirPath);
+    const cdCmd = isWinPath ? `cd "${dirPath}"` : `cd ${dirPath.replace(/ /g, '\\ ')}`;
     this.socket.emit('terminal:input', {
       id: this.activeTerminalId,
-      data: `cd ${dirPath.replace(/ /g, '\\ ')}\r`,
+      data: cdCmd + '\r',
     });
   }
 

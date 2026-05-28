@@ -2,6 +2,7 @@
 // 初始设置脚本
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
@@ -23,6 +24,9 @@ function main() {
       console.log('[OK] .env 文件已生成（JWT密钥已随机生成）');
     } else {
       const secret = crypto.randomBytes(32).toString('hex');
+      const home = os.homedir();
+      const desktop = path.join(home, 'Desktop');
+      const documents = path.join(home, 'Documents');
       const envContent = `# CatDesk Remote Console 配置
 PORT=3000
 HOST=0.0.0.0
@@ -32,11 +36,11 @@ AUTH_USERNAME=admin
 AUTH_PASSWORD_HASH=
 
 # 工作目录白名单（逗号分隔）
-ALLOWED_DIRS=/Users/zhanghonghao/Desktop,/Users/zhanghonghao/Documents
-DEFAULT_WORKSPACE=/Users/zhanghonghao/Desktop
+ALLOWED_DIRS=${desktop},${documents}
+DEFAULT_WORKSPACE=${desktop}
 
-# Claude Code 路径
-CLAUDE_CODE_PATH=mc
+# Claude Code CLI 路径（确保 claude 命令在 PATH 中）
+CLAUDE_CODE_PATH=claude
 
 # 安全配置
 RATE_LIMIT_WINDOW_MS=60000

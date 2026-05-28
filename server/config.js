@@ -1,4 +1,5 @@
 require('dotenv').config();
+const os = require('os');
 
 module.exports = {
   port: parseInt(process.env.PORT || '3000', 10),
@@ -8,8 +9,8 @@ module.exports = {
     username: process.env.AUTH_USERNAME || 'admin',
     passwordHash: process.env.AUTH_PASSWORD_HASH || '',
   },
-  allowedDirs: (process.env.ALLOWED_DIRS || process.env.HOME).split(',').map(d => d.trim()),
-  defaultWorkspace: process.env.DEFAULT_WORKSPACE || process.env.HOME,
+  allowedDirs: (process.env.ALLOWED_DIRS || os.homedir()).split(',').map(d => d.trim()),
+  defaultWorkspace: process.env.DEFAULT_WORKSPACE || os.homedir(),
   publicUrl: process.env.PUBLIC_URL || 'http://localhost:3000',
   rateLimit: {
     windowMs: 60 * 1000,

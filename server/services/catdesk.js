@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 // Claude Code 会话文件存储在 ~/.claude/projects/ 下
-const CLAUDE_DIR = path.join(process.env.HOME || '', '.claude', 'projects');
+const CLAUDE_DIR = path.join(os.homedir(), '.claude', 'projects');
 
 /**
  * 扫描项目目录下的 .jsonl 会话文件，返回会话列表

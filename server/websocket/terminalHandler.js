@@ -2,8 +2,14 @@ const { spawn, execSync } = require('child_process');
 const config = require('../config');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const auditLog = require('../services/auditLog');
 const commandGuard = require('../services/commandGuard');
+
+const isWin = process.platform === 'win32';
+const shell = isWin ? (process.env.ComSpec || 'cmd.exe') : '/bin/zsh';
+const shellArgs = isWin ? ['/c'] : ['-c'];
+const pathSep = isWin ? ';' : ':';
 
 // 基于命令执行的终端模拟
 module.exports = function (nsp) {
@@ -25,7 +31,7 @@ module.exports = function (nsp) {
       socket.emit('terminal:created', { id });
 
       // 发送初始提示符
-      const prompt = `\x1b[1;36m${workDir.replace(process.env.HOME, '~')}\x1b[0m \x1b[1;33m$\x1b[0m `;
+      const prompt = `\x1b[1;36m${workDir.replace(os.homedir(), '~')}\x1b[0m \x1b[1;33m$\x1b[0m `;
       socket.emit('terminal:output', { id, data: prompt });
 
       auditLog.log({ user, action: 'terminal_create', detail: `创建终端 cwd=${workDir}` });
@@ -136,7 +142,7 @@ module.exports = function (nsp) {
 };
 
 function sendPrompt(socket, id, entry) {
-  const short = entry.cwd.replace(process.env.HOME, '~');
+  const short = entry.cwd.replace(os.homedir(), '~');
   const prompt = `\x1b[1;36m${short}\x1b[0m \x1b[1;33m$\x1b[0m `;
   socket.emit('terminal:output', { id, data: prompt });
 }
@@ -153,7 +159,7 @@ function handleTabCompletion(socket, id, entry) {
 
   try {
     // 解析路径
-    const expandedPartial = partial.replace(/^~/, process.env.HOME);
+    const expandedPartial = partial.replace(/^~/, os.homedir());
     const dir = path.dirname(path.resolve(entry.cwd, expandedPartial));
     const basename = path.basename(expandedPartial);
 
@@ -191,7 +197,7 @@ function handleTabCompletion(socket, id, entry) {
         }).join('  ');
         socket.emit('terminal:output', { id, data: `\r\n${display}\r\n` });
         // 重新显示当前输入
-        const short = entry.cwd.replace(process.env.HOME, '~');
+        const short = entry.cwd.replace(os.homedir(), '~');
         const prompt = `\x1b[1;36m${short}\x1b[0m \x1b[1;33m$\x1b[0m ${entry.inputBuffer}`;
         socket.emit('terminal:output', { id, data: prompt });
       }
@@ -215,7 +221,7 @@ function getCommonPrefix(strings) {
 function executeCommand(socket, id, entry, cmd) {
   // 处理 cd 命令
   if (cmd.startsWith('cd ')) {
-    const target = cmd.slice(3).trim().replace(/^~/, process.env.HOME);
+    const target = cmd.slice(3).trim().replace(/^~/, os.homedir());
     const newDir = path.resolve(entry.cwd, target);
     if (fs.existsSync(newDir) && fs.statSync(newDir).isDirectory()) {
       entry.cwd = newDir;
@@ -228,7 +234,7 @@ function executeCommand(socket, id, entry, cmd) {
   }
 
   if (cmd === 'cd') {
-    entry.cwd = process.env.HOME;
+    entry.cwd = os.homedir();
     sendPrompt(socket, id, entry);
     socket.emit('terminal:cmd_done', { id, cmd });
     return;
@@ -242,9 +248,12 @@ function executeCommand(socket, id, entry, cmd) {
   }
 
   // 执行其他命令
-  const proc = spawn('/bin/zsh', ['-c', cmd], {
+  const extraPaths = isWin
+    ? [path.join(os.homedir(), '.local', 'bin')]
+    : ['/usr/local/bin', '/opt/homebrew/bin'];
+  const proc = spawn(shell, [...shellArgs, cmd], {
     cwd: entry.cwd,
-    env: { ...process.env, TERM: 'xterm-256color', PATH: ['/usr/local/bin', '/opt/homebrew/bin', process.env.PATH].join(':') },
+    env: { ...process.env, TERM: 'xterm-256color', PATH: [...extraPaths, process.env.PATH].join(pathSep) },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 

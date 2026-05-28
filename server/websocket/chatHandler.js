@@ -1,5 +1,6 @@
 const ClaudeCodeSession = require('../services/claudeCode');
 const auditLog = require('../services/auditLog');
+const os = require('os');
 const { recordUsage } = require('../routes/usage');
 const { getPermissionMode } = require('../services/permissionSettings');
 
@@ -28,7 +29,7 @@ module.exports = function (nsp) {
 
       const session = new ClaudeCodeSession({
         sessionId: sessionId || null,
-        workDir: workDir || process.env.HOME,
+        workDir: workDir || os.homedir(),
         model: model || null,
         permissionMode,
       });
