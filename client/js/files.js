@@ -25,7 +25,7 @@ class FilesModule {
         const data = await res.json();
         this.currentPath = data.data.defaultWorkspace;
       } catch {
-        this.currentPath = '/Users/zhanghonghao/Desktop';
+        this.currentPath = 'C:\\';
       }
     }
 
@@ -66,12 +66,25 @@ class FilesModule {
   }
 
   _renderBreadcrumb(fullPath) {
-    const parts = fullPath.split('/').filter(Boolean);
-    let html = '<span class="breadcrumb-item" data-path="/">/</span>';
+    const isWinPath = /^[A-Z]:\\/i.test(fullPath);
+    const parts = fullPath.split(/[\/\\]/).filter(Boolean);
+    let html = '';
     let accumulated = '';
+
+    if (isWinPath) {
+      const drive = parts[0];
+      html = `<span class="breadcrumb-item" data-path="${drive}\\">${drive}\\</span>`;
+      accumulated = drive + '\\';
+      parts.shift();
+    } else {
+      html = '<span class="breadcrumb-item" data-path="/">/</span>';
+    }
+
     for (const part of parts) {
-      accumulated += '/' + part;
-      html += `<span class="breadcrumb-sep">/</span><span class="breadcrumb-item" data-path="${accumulated}">${part}</span>`;
+      accumulated = isWinPath ? accumulated + part : accumulated + '/' + part;
+      const sep = isWinPath ? '\\' : '/';
+      html += `<span class="breadcrumb-sep">${sep}</span><span class="breadcrumb-item" data-path="${accumulated}">${part}</span>`;
+      if (isWinPath) accumulated += '\\';
     }
     this.breadcrumb.innerHTML = html;
     this.breadcrumb.querySelectorAll('.breadcrumb-item').forEach(item => {
@@ -112,7 +125,7 @@ class FilesModule {
     let headerHtml = `
       <div class="preview-header">
         <div class="preview-info">
-          <span class="preview-filename">${filePath.split('/').pop()}</span>
+          <span class="preview-filename">${filePath.split(/[/\\]/).pop()}</span>
           <span class="preview-size">${this._formatSize(size)}</span>
           ${totalLines ? `<span class="preview-lines">${totalLines} 行</span>` : ''}
         </div>

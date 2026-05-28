@@ -379,13 +379,14 @@ class WorkspaceModule {
     chatInput.style.height = 'auto';
     chatInput.style.height = Math.min(chatInput.scrollHeight, 150) + 'px';
     chatInput.focus();
-    App.toast(`已插入: ${filePath.split('/').pop()}`, 'info');
+    const fileName = filePath.split(/[/\\]/).pop();
+    App.toast(`已插入: ${fileName}`, 'info');
   }
 
   // ===== 目录浏览器 =====
   _openDirBrowser() {
     this.dirBrowserModal.classList.remove('hidden');
-    this._browsePath = this.currentWorkspace || (typeof process !== 'undefined' ? process.env.HOME : '/');
+    this._browsePath = this.currentWorkspace || 'C:\\';
     this._loadDirBrowser(this._browsePath);
   }
 
@@ -453,8 +454,18 @@ class WorkspaceModule {
   // ===== 工具方法 =====
   _shortenPath(p) {
     if (!p) return '';
-    const home = '/Users/' + (p.match(/^\/Users\/([^/]+)/)?.[1] || '');
-    if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+    // Windows: C:\Users\xxx → ~
+    const winMatch = p.match(/^([A-Z]:\\Users\\[^\\]+)/i);
+    if (winMatch) {
+      const home = winMatch[1];
+      if (p.toLowerCase().startsWith(home.toLowerCase())) return '~' + p.slice(home.length);
+    }
+    // macOS/Linux: /Users/xxx or /home/xxx → ~
+    const unixMatch = p.match(/^\/(?:Users|home)\/([^/]+)/);
+    if (unixMatch) {
+      const home = `/Users/${unixMatch[1]}`;
+      if (p.startsWith(home)) return '~' + p.slice(home.length);
+    }
     return p;
   }
 

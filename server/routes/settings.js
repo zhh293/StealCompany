@@ -2,6 +2,7 @@ const express = require('express');
 const config = require('../config');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const permissionSettings = require('../services/permissionSettings');
 
 const router = express.Router();
@@ -48,7 +49,7 @@ router.post('/settings/permission-mode', (req, res) => {
 router.get('/settings/workspace-dirs', (req, res) => {
   const dirs = new Set(config.allowedDirs);
 
-  const claudeProjectsDir = path.join(process.env.HOME || '', '.claude', 'projects');
+  const claudeProjectsDir = path.join(os.homedir(), '.claude', 'projects');
   try {
     if (fs.existsSync(claudeProjectsDir)) {
       const projectDirs = fs.readdirSync(claudeProjectsDir, { withFileTypes: true })

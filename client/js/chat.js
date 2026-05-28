@@ -447,7 +447,34 @@ class ChatModule {
   }
 
   _renderMarkdownWithPaths(text) {
-    const html = DOMPurify.sanitize(marked.parse(text));
+    // 1. 提取 LaTeX 数学表达式，用占位符替换
+    const mathBlocks = [];
+    let processed = text;
+    processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
+      const i = mathBlocks.length;
+      mathBlocks.push({ tex: tex.trim(), display: true });
+      return `%%MATH_BLOCK_${i}%%`;
+    });
+    processed = processed.replace(/(?<!\$)\$(?!\$)((?:[^$\\]|\\.)+?)\$(?!\$)/g, (_, tex) => {
+      const i = mathBlocks.length;
+      mathBlocks.push({ tex: tex.trim(), display: false });
+      return `%%MATH_BLOCK_${i}%%`;
+    });
+
+    // 2. marked 解析 + DOMPurify 净化
+    let html = DOMPurify.sanitize(marked.parse(processed));
+
+    // 3. 还原数学占位符为 KaTeX 渲染结果
+    html = html.replace(/%%MATH_BLOCK_(\d+)%%/g, (_, idx) => {
+      const { tex, display } = mathBlocks[parseInt(idx)];
+      try {
+        return katex.renderToString(tex, { displayMode: display, throwOnError: false, trust: true });
+      } catch (e) {
+        return `<code class="math-error">${this._escapeHtml(tex)}</code>`;
+      }
+    });
+
+    // 4. 文件路径高亮
     const pathRegex = /(?<!["`'])(\/(Users|home|tmp|var|etc|opt)[^\s<>"'`\)]*\.\w+)(?!["`'])/g;
     return html.replace(pathRegex, (match, path) => {
       return `<a class="clickable-path" data-path="${this._escapeHtml(path)}" title="点击在文件浏览器中打开">${this._escapeHtml(path)}</a>`;

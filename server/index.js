@@ -66,11 +66,13 @@ require('./websocket')(io);
 // 启动
 httpServer.listen(config.port, '0.0.0.0', () => {
   console.log('');
-  console.log('  ╔══════════════════════════════════════════════╗');
-  console.log('  ║       CatDesk Remote Console v1.0.0         ║');
-  console.log('  ╠══════════════════════════════════════════════╣');
-  console.log(`  ║  Local:  http://localhost:${config.port}              ║`);
-  console.log(`  ║  Public: ${config.publicUrl.padEnd(35)}║`);
-  console.log('  ╚══════════════════════════════════════════════╝');
+  console.log('  ╔══════════════════════════════════════════════════╗');
+  console.log('  ║         CatDesk Remote Console v1.0.0           ║');
+  console.log('  ╠══════════════════════════════════════════════════╣');
+  console.log(`  ║  Local:  http://localhost:${config.port}                  ║`);
+  console.log(`  ║  Public: ${config.publicUrl.padEnd(39)}║`);
+  console.log(`  ║  CLI:    ${(process.env.CLAUDE_CODE_PATH || 'claude').padEnd(39)}║`);
+  console.log(`  ║  Dirs:   ${config.allowedDirs.length.toString().padEnd(39)}║`);
+  console.log('  ╚══════════════════════════════════════════════════╝');
   console.log('');
 });

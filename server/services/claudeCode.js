@@ -1,17 +1,23 @@
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 const path = require('path');
+const os = require('os');
+const config = require('../config');
 const { getPermissionMode } = require('./permissionSettings');
 
-// 确保 PATH 包含常见的 bin 目录（Node 子进程可能缺失）
-const extraPaths = ['/usr/local/bin', '/opt/homebrew/bin', path.join(process.env.HOME || '', '.local/bin')];
-const fullPath = [...extraPaths, process.env.PATH].join(':');
+// Windows 下用 ; 分隔 PATH，Unix 用 :
+const isWin = process.platform === 'win32';
+const pathSep = isWin ? ';' : ':';
+const extraPaths = isWin
+  ? [path.join(os.homedir(), '.local', 'bin')]
+  : ['/usr/local/bin', '/opt/homebrew/bin', path.join(os.homedir(), '.local', 'bin')];
+const fullPath = [...extraPaths, process.env.PATH].join(pathSep);
 
 class ClaudeCodeSession extends EventEmitter {
   constructor(options = {}) {
     super();
     this.sessionId = options.sessionId || null;
-    this.workDir = options.workDir || process.env.HOME;
+    this.workDir = options.workDir || os.homedir();
     this.model = options.model || null;
     this.process = null;
     this.killed = false;
@@ -21,7 +27,7 @@ class ClaudeCodeSession extends EventEmitter {
 
   send(prompt) {
     const args = [
-      '--code', '-p', prompt,
+      '-p', prompt,
       '--output-format', 'stream-json',
       '--verbose',
       '--include-partial-messages',
@@ -47,7 +53,10 @@ class ClaudeCodeSession extends EventEmitter {
     }
 
     this.killed = false;
-    this.process = spawn('mc', args, {
+    const claudePath = process.env.CLAUDE_CODE_PATH || 'claude';
+    console.log('[ClaudeCode] spawn:', claudePath, JSON.stringify(args));
+    console.log('[ClaudeCode] cwd:', this.workDir);
+    this.process = spawn(claudePath, args, {
       cwd: this.workDir,
       env: { ...process.env, PATH: fullPath, TERM: 'dumb' },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -73,12 +82,14 @@ class ClaudeCodeSession extends EventEmitter {
 
     this.process.stderr.on('data', (chunk) => {
       const text = chunk.toString();
+      console.log('[ClaudeCode] stderr:', text.slice(0, 300));
       if (text.includes('Error') || text.includes('error')) {
         this.emit('error', { message: text });
       }
     });
 
     this.process.on('close', (code) => {
+      console.log('[ClaudeCode] exit code:', code);
       if (buffer.trim()) {
         try {
           this._handleEvent(JSON.parse(buffer));
@@ -90,6 +101,7 @@ class ClaudeCodeSession extends EventEmitter {
     });
 
     this.process.on('error', (err) => {
+      console.log('[ClaudeCode] spawn error:', err.code, err.message);
       this.emit('error', { message: `进程启动失败: ${err.message}` });
     });
   }
