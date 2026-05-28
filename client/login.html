@@ -266,7 +266,18 @@
     // 如果已有有效 token，直接跳转
     const token = localStorage.getItem('catdesk_token');
     if (token) {
-      window.location.href = '/';
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.exp * 1000 > Date.now()) {
+          window.location.href = '/';
+        } else {
+          localStorage.removeItem('catdesk_token');
+          localStorage.removeItem('catdesk_username');
+        }
+      } catch {
+        localStorage.removeItem('catdesk_token');
+        localStorage.removeItem('catdesk_username');
+      }
     }
 
     form.addEventListener('submit', async (e) => {
